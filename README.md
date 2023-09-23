@@ -7,9 +7,9 @@ This does not remove the need for (react-native) doctor. That needs to be solid 
 
 Download the script, run it from the root of the project directory.
 
-$ npx react-native@latest init foobar
-$ cd foobar
-$ python somewhere/reactnative-setup.py
+    $ npx react-native@latest init foobar
+    $ cd foobar
+    $ python somewhere/reactnative-setup.py
 
 Issues and PRs welcome!
 

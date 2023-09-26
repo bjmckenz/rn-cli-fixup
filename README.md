@@ -5,9 +5,11 @@ This is a script that you can run on a freshly-created ("npx react-native@latest
 
 This does not remove the need for (react-native) doctor. That needs to be solid too.
 
-Download the script, run it from the root of the project directory.
+Download the script, EDIT IT, run it from the root of the project directory.
 
     $ npx react-native@latest init foobar
+    $ npx react-native doctor
+    ...Output: All green - no errors!
     $ cd foobar
     $ python somewhere/reactnative-setup.py
 

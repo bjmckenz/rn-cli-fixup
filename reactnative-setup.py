@@ -3,13 +3,22 @@ import re
 import json
 import os
 import subprocess
+import shutil
+import sys
+from urllib.request import urlopen
+
+
+#  To do
+# - look for  JDK and SDK.
+# - can detect NDK? Versions?
+# - Verify sdkmanager runs -- maybe not
+# - Verify JDK is present before keytool bombs
+#  Handle Mac
+
 
 # This script is intended to be run from the root of a React Native project directory.
 
 ### vvvv BEGIN CUSTOMIZE vvvv ###
-
-# Specify the path to your JDK
-java_home_path = 'C:/Program Files/Java/jdk-20'
 
 # Specify the path to bundletool.jar
 bt = 'C:\\Program Files\\bundletool-all-1.15.4.jar'
@@ -32,6 +41,8 @@ expected_java_version = "20.0.2"
 
 jdk_path = "https://www.dropbox.com/scl/fi/hfwwy11wpskpzekh71ztg/jdk-20_windows-x64_bin.exe?rlkey=wkx4wfurf8l2valcqaawztvun"
 
+bt_loc = 'https://github.com/google/bundletool'
+
 signing_config_text = '''
     release {{
         storeFile file('{keystore_file}')
@@ -46,9 +57,17 @@ signing_config_text = '''
     key_password=key_password 
   )
 
+gradle_properties_to_add = [
+    'MYAPP_RELEASE_STORE_FILE={keystore_file}.jks'.format(keystore_file=keystore_file),
+    'MYAPP_RELEASE_KEY_ALIAS={key_alias}'.format(key_alias=key_alias),
+    'MYAPP_RELEASE_STORE_PASSWORD={store_password}'.format(store_password=store_password),
+    'MYAPP_RELEASE_KEY_PASSWORD={key_password}'.format(key_password=key_password),
+]
+
 
 app_tsx_path = 'App.tsx'  # Expected for new projects
-app_js_path = 'App.js' # we create this if we remove App.tsx
+app_tsx_original_length = 2605
+
 package_json_path = 'package.json'
 universal_json_path = 'android\\universal.json' # created to specify which apk to extract from apks file
 gradle_properties_path = 'android\\gradle.properties'
@@ -58,14 +77,14 @@ gradle_wrapper_properties_path = 'android\\gradle\\wrapper\\gradle-wrapper.prope
 
 dependencies_to_add = {
   "@react-native-masked-view/masked-view": "^0.2.9",
-  "@react-navigation/drawer": "^6.6.3",
-  "@react-navigation/native": "^6.1.7",
-  "@react-navigation/native-stack": "^6.9.13",
-  "@react-navigation/stack": "^6.3.17",
+  "@react-navigation/drawer": "^6.6.4",
+  "@react-navigation/native": "^6.1.8",
+  "@react-navigation/native-stack": "^6.9.14",
+  "@react-navigation/stack": "^6.3.18",
   "react": "18.2.0",
-  "react-native": "0.72.4",
-  "react-native-gesture-handler": "^2.12.1",
-  "react-native-reanimated": "^3.5.0",
+  "react-native": "0.72.5",
+  "react-native-gesture-handler": "^2.13.1",
+  "react-native-reanimated": "^3.5.4",
   "react-native-safe-area-context": "^4.7.2",
   "react-native-screens": "^3.25.0"
 }
@@ -86,7 +105,19 @@ release_section_text = """
     }}
 """
 
+prettier_rc = """
+{
+  "arrowParens": "avoid",
+  "bracketSameLine": true,
+  "bracketSpacing": false,
+  "singleQuote": true,
+  "trailingComma": "all"
+}
+"""
+
+
 # This is the Hello-Worldiest of Hello-World apps.
+app_js_path = 'App.js' # we create this if we remove App.tsx
 app_js_content = """
 import React from 'react';
 import {
@@ -186,6 +217,8 @@ $ {extract_apk_cmd}'''.format(
 
 clean_repo_cmd = 'rnc clean --include "android,metro,npm,watchman,yarn"'
 
+output_file = 'reactnative-fixup.txt'
+
 ### ^^^ NOT INTENDED TO BE CUSTOMIZED ^^^ ###
 
 
@@ -216,19 +249,12 @@ def add_signing_config_to_build_gradle(file_path):
 
 
 def add_keys_to_gradle_properties(properties_file_path):
-    properties_to_add = [
-        "MYAPP_RELEASE_STORE_FILE=my-release-key.jks",
-        "MYAPP_RELEASE_KEY_ALIAS=my-key-alias",
-        "MYAPP_RELEASE_STORE_PASSWORD=12345678",
-        "MYAPP_RELEASE_KEY_PASSWORD=12345678"
-    ]
-
     try:
         with open(properties_file_path, 'r') as properties_file:
             properties_content = properties_file.read()
 
             # Check if each property already exists in the file
-            for prop in properties_to_add:
+            for prop in gradle_properties_to_add:
                 if prop not in properties_content:
                     properties_content += f"{prop}\n"
 
@@ -295,7 +321,7 @@ def add_gradle_java_home(gradle_properties_path, actual_java_home_path):
         with open(gradle_properties_path, 'r') as gradle_properties_file:
             gradle_properties_content = gradle_properties_file.readlines()
 
-        java_home_line = f"org.gradle.java.home={actual_java_home_path}\n"
+        java_home_line = f"org.gradle.java.home={actual_java_home_path}/\n"
         java_home_exists = False
 
         for i, line in enumerate(gradle_properties_content):
@@ -330,8 +356,27 @@ def create_universal_json(universal_json_path, contents):
         print(f"ERROR: {e}")
 
 
+def errors_in_java_home_and_path():
+    errors_occurred = False
+    java_loc = shutil.which('java')
+    if not java_loc:
+        print('FATAL: java is not in your path. Set it in your environment.')
+        errors_occurred = True
 
-
+    java_home_path = os.environ.get('JAVA_HOME')
+    if not java_home_path:
+        print('FATAL: JAVA_HOME is not defined. Set it in your environment.')
+        errors_occurred = True 
+    
+    if not errors_occurred:
+        # both need to exist, and path must be parent of loc
+        # Java in the /bin under the jdk dir
+        actual_java_install_path = os.path.dirname(os.path.dirname(java_loc))
+        if actual_java_install_path != java_home_path:
+            print('FATAL: java executable location does not match up with JAVA_HOME. Fix JAVA_HOME in your environment.')
+            errors_occurred = True
+    
+    return errors_occurred
 
 def correct_version_of_java_installed(version_desired):
     try:
@@ -356,6 +401,12 @@ def correct_version_of_java_installed(version_desired):
 def remove_tsx_and_create_app_js():
     try:
         if os.path.exists(app_tsx_path):
+
+            if os.path.getsize(app_tsx_path) != app_tsx_original_length:
+                print(f"WARN: {app_tsx_path} has been modified. Is this intentional?")
+                print(f"INFO: {app_tsx_path} not overwritten.")
+                return
+            
             # Remove the existing App.tsx file if it exists
             os.remove(app_tsx_path)
 
@@ -412,22 +463,76 @@ def generate_keystore():
       print("ERROR: Keystore generated failed.")
       return False
 
+def npm_package_version(pkg):
+    url = 'https://unpkg.com/{pkg}/package.json'.format(pkg=pkg)
+    response = urlopen(url)
+    package_json = json.loads(response.read())
+    return package_json['version']
+
+def compare_expected_npm_package_versions_to_latest_available():
+    for p in dependencies_to_add.keys():
+        compare_to = npm_package_version(p)
+        if dependencies_to_add[p][0] == '^':
+            compare_to = '^' + compare_to
+
+        if compare_to != dependencies_to_add[p]:
+            print('WARN: Expecting version {v} of {p} but found {v2}'.format(v=dependencies_to_add[p], p=p, v2=compare_to))
+
+        #print(p,' ',npm_package_version(p))
 
 
+print("*********")
+print('INFO: All output from this script will be logged to {output_file}'.format(output_file=output_file))
+print("*********")
+
+class Logger(object):
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.log = open(output_file, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)  
+
+    def flush(self):
+        self.log.flush()
+
+sys.stdout = Logger()
+
+print("""
+*******
+This script MAY help you. You *should* have run "npx react-native doctor"
+and fixed the issues first. This may help you with issues there if you can't figure out why doctor is failing.
+      
+BUT DO NOT try to run-android without BOTH "doctor" and this script reporting success.
+      
+Note that "WARN:" does not mean "Error", it means "be sure this is correct."
+*********** 
+      
+            """)
+
+if errors_in_java_home_and_path():
+    print('INFO: If needed, download and install JDK\n\n     {jv}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(jv=expected_java_version))
+
+    print('FATAL: Exiting...')
+    exit()
+
+
+
+if not os.path.exists(bt):
+    print('FATAL: bundletool.jar does not exist. Please specify the correct path to it.')
+    print('INFO: Download it from {bt_loc}'.format(bt_loc=bt_loc))
+    print('INFO: And ideally copy it to {bt}'.format(bt=bt))
+    print('FATAL: Exiting...')
+    exit()
 
 if not os.path.exists(package_json_path):
     print('FATAL: package.json does not exist. Run this from an initialized project directory.')
     print('FATAL: Exiting...')
     exit()
 
-if not os.path.isdir(java_home_path):
-    print('FATAL: Java home path does not exist. Please specify the correct path to your JDK.')
-    print('FATAL: Exiting...')
-    exit()
-
-
-if not os.path.exists(bt):
-    print('FATAL: bundletool.jar does not exist. Please specify the correct path to it.')
+if not os.path.exists("android"):
+    print('FATAL: "android" does not exist. This does not appear to be a React-Native project dir.')
     print('FATAL: Exiting...')
     exit()
 
@@ -439,11 +544,22 @@ else:
 
     print('INFO: Download link: {jdk_path}'.format(jdk_path=jdk_path))
 
+compare_expected_npm_package_versions_to_latest_available()
+
 adjust_package_json(package_json_path)
 
 remove_tsx_and_create_app_js()
 
-add_gradle_java_home(gradle_properties_path, java_home_path)
+if not os.path.exists(".prettierrc"):
+    with open('.prettierrc', 'w') as rc_file:
+        rc_file.write(prettier_rc)
+
+    print("INFO: .prettierrc file created.")
+
+canonical_java_home_path = os.environ.get('JAVA_HOME')
+osified_java_home_path = canonical_java_home_path.replace('\\','\\\\')
+
+add_gradle_java_home(gradle_properties_path, osified_java_home_path)
 
 add_keys_to_gradle_properties(gradle_properties_path)
 

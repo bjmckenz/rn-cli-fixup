@@ -7,12 +7,23 @@ import shutil
 import sys
 from urllib.request import urlopen
 
+def getfile_insensitive(path):
+    directory, filename = os.path.split(path)
+    directory, filename = (directory or '.'), filename.lower()
+    for f in os.listdir(directory):
+        newpath = os.path.join(directory, f)
+        if os.path.exists(newpath) and f.lower() == filename:
+            return newpath
+
+def exists_insensitive(path):
+    return getfile_insensitive(path) is not None
 
 #  To do
-# - look for  JDK and SDK.
-# - can detect NDK? Versions?
 # - Verify sdkmanager runs -- maybe not
 # - Verify JDK is present before keytool bombs
+# - how to fix paths
+# reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+# reg query "HKCU\Environment"
 #  Handle Mac
 
 
@@ -219,6 +230,21 @@ clean_repo_cmd = 'rnc clean --include "android,metro,npm,watchman,yarn"'
 
 output_file = 'reactnative-fixup.txt'
 
+# ideal way to find
+android_home = os.environ.get('ANDROID_HOME')
+android_sdk_root = os.environ.get('ANDROID_SDK_ROOT')
+
+# tests command-line tools
+cmdline_tools_path = 'cmdline-tools/latest/bin'
+# tests NDK
+ndk_version = '23.1.7779620' 
+# tests buildtools
+build_tools_versions = ['30.0.3', '33.0.0', '34.0.0']
+# platform-tools
+adb_command = 'adb'
+# tests tools dir
+emu = 'emulator'
+
 ### ^^^ NOT INTENDED TO BE CUSTOMIZED ^^^ ###
 
 
@@ -345,7 +371,7 @@ def add_gradle_java_home(gradle_properties_path, actual_java_home_path):
 
 def create_universal_json(universal_json_path, contents):
     try:
-        if not os.path.exists(universal_json_path):
+        if not exists_insensitive(universal_json_path):
             with open(universal_json_path, 'w') as universal_json_file:
                 json.dump(contents, universal_json_file, indent=4)
 
@@ -400,7 +426,7 @@ def correct_version_of_java_installed(version_desired):
 
 def remove_tsx_and_create_app_js():
     try:
-        if os.path.exists(app_tsx_path):
+        if exists_insensitive(app_tsx_path):
 
             if os.path.getsize(app_tsx_path) != app_tsx_original_length:
                 print(f"WARN: {app_tsx_path} has been modified. Is this intentional?")
@@ -449,7 +475,7 @@ def adjust_package_json(json_path):
         print(f"WARN: {e}")
 
 def generate_keystore():
-    if os.path.exists(keystore_path):
+    if exists_insensitive(keystore_path):
       print("WARN: Keystore already exists. (Overwriting it)")
       os.remove(keystore_path)
 
@@ -470,6 +496,8 @@ def npm_package_version(pkg):
     return package_json['version']
 
 def compare_expected_npm_package_versions_to_latest_available():
+    print("INFO: Checking [newest published] npm package versions...")
+    any_changes = False
     for p in dependencies_to_add.keys():
         compare_to = npm_package_version(p)
         if dependencies_to_add[p][0] == '^':
@@ -477,9 +505,22 @@ def compare_expected_npm_package_versions_to_latest_available():
 
         if compare_to != dependencies_to_add[p]:
             print('WARN: Expecting version {v} of {p} but found {v2}'.format(v=dependencies_to_add[p], p=p, v2=compare_to))
+            any_changes = True
 
         #print(p,' ',npm_package_version(p))
 
+    if any_changes:
+        print("INFO: (Tell BJM or write an issue against this script on GitHub)")
+
+    print("INFO: ...Done checking npm package versions.")
+
+def keytool_missing(java_home_path):
+    if exists_insensitive(os.path.join(java_home_path,'bin','keytool.exe')):
+        return False
+    
+    print('FATAL: keytool command not found. Set it in your path.')
+    print('INFO: This is usually in {jdk}\\bin'.format(jdk=java_home_path))
+    return True
 
 print("*********")
 print('INFO: All output from this script will be logged to {output_file}'.format(output_file=output_file))
@@ -518,23 +559,60 @@ if errors_in_java_home_and_path():
     exit()
 
 
+if android_home is None and android_sdk_root is None:
+    print('FATAL: ANDROID_HOME and ANDROID_SDK_ROOT are not defined. Set at least one in your environment.')
+    print("INFO: This may indicate you haven't downloaded the ANDROID SDK yet." )
+    print('INFO: Download the Android SDK from https://developer.android.com/studio')
+    print('FATAL: Exiting...')
+    exit()
 
-if not os.path.exists(bt):
+android_sdk_root = android_home if android_home else android_sdk_root
+
+if not exists_insensitive(android_sdk_root):
+    print('FATAL: ANDROID_SDK_ROOT variable is set but directory does not exist. Set it CORRECTLY in your environment.')
+    print('FATAL: Exiting...')
+    exit()
+
+error_count = 0
+
+if not exists_insensitive(bt):
     print('FATAL: bundletool.jar does not exist. Please specify the correct path to it.')
     print('INFO: Download it from {bt_loc}'.format(bt_loc=bt_loc))
     print('INFO: And ideally copy it to {bt}'.format(bt=bt))
-    print('FATAL: Exiting...')
-    exit()
+    error_count += 1
 
-if not os.path.exists(package_json_path):
+if not exists_insensitive(package_json_path):
     print('FATAL: package.json does not exist. Run this from an initialized project directory.')
+    error_count += 1
+
+if not exists_insensitive("android"):
+    print('FATAL: "android" does not exist. This does not appear to be a React-Native project dir.')
+    error_count += 1
+
+if not exists_insensitive(os.path.join(android_sdk_root,cmdline_tools_path)):
+    print(os.path.join(android_sdk_root,cmdline_tools_path))
+    print('FATAL: Command-line tools (latest) are not installed in Android SDK.')
+    error_count += 1
+
+if not exists_insensitive(os.path.join(android_sdk_root,'ndk',ndk_version)):
+    print('FATAL: Android SDK NDK version {ndk_version} not installed.'.format(ndk_version=ndk_version))
+    error_count += 1
+
+for btv in build_tools_versions:
+    if not exists_insensitive(os.path.join(android_sdk_root,'build-tools',btv)):
+        print('FATAL: Android SDK build-tools version {btv} not installed.'.format(btv=btv))
+        error_count += 1
+
+if not shutil.which(adb_command):
+    print('FATAL: adb command not found. Set it in your path (install platform-tools if needed).')
+    error_count += 1
+
+if error_count > 0:
     print('FATAL: Exiting...')
     exit()
 
-if not os.path.exists("android"):
-    print('FATAL: "android" does not exist. This does not appear to be a React-Native project dir.')
-    print('FATAL: Exiting...')
-    exit()
+if not shutil.which(emu):
+    print('WARN: Emulator not found. Did you intend to install it?')
 
 # Call the function to check if Java 20 is installed
 if correct_version_of_java_installed(expected_java_version):
@@ -550,7 +628,7 @@ adjust_package_json(package_json_path)
 
 remove_tsx_and_create_app_js()
 
-if not os.path.exists(".prettierrc"):
+if not exists_insensitive(".prettierrc"):
     with open('.prettierrc', 'w') as rc_file:
         rc_file.write(prettier_rc)
 
@@ -571,6 +649,11 @@ add_signing_config_to_build_gradle(build_gradle_path)
 
 update_build_gradle_release_section(gradle_properties_path)
 
+if keytool_missing(osified_java_home_path):
+    print('FATAL: Exiting...')
+    exit()
+ 
 generate_keystore()
 
 print("\nINFO: Be sure to:",post_config_steps)
+print('\nINFO: Remember: output from this script is in {output_file}'.format(output_file=output_file))

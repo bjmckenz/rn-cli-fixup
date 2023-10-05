@@ -5,34 +5,28 @@ import os
 import subprocess
 import shutil
 import sys
+import platform
 from urllib.request import urlopen
 
-def getfile_insensitive(path):
-    directory, filename = os.path.split(path)
-    directory, filename = (directory or '.'), filename.lower()
-    for f in os.listdir(directory):
-        newpath = os.path.join(directory, f)
-        if os.path.exists(newpath) and f.lower() == filename:
-            return newpath
-
-def exists_insensitive(path):
-    return getfile_insensitive(path) is not None
-
+    
 #  To do
-# - Verify sdkmanager runs -- maybe not
-# - Verify JDK is present before keytool bombs
-# - how to fix paths
-# reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
-# reg query "HKCU\Environment"
 #  Handle Mac
 
 
 # This script is intended to be run from the root of a React Native project directory.
 
+# ENVIRONMENTY STUFF
+
+running_on_windows = platform.system() == 'Windows'
+shell_is_unixy = os.environ.get('SHELL') != None
+
+# path separator in commands and paths
+path_separator = '\\' if running_on_windows else '/'
+cmd_argument_separator = '/' if shell_is_unixy else '\\'
 ### vvvv BEGIN CUSTOMIZE vvvv ###
 
 # Specify the path to bundletool.jar
-bt = 'C:\\Program Files\\bundletool-all-1.15.4.jar'
+bt = 'C:{ps}Program Files{ps}bundletool-all-1.15.4.jar'.format(ps=path_separator)
 
 keystore_file = "my-release-key"
 store_password = "12345678"
@@ -46,7 +40,7 @@ distinguished_name = "CN=MyName, OU=MyOrgUnit, O=MyOrg, L=MyCity, ST=MyStateOrPr
 
 ### vvv NOT INTENDED TO BE CUSTOMIZED (but fix it if needed) vvv ###
 
-new_distribution_url = 'https\\://services.gradle.org/distributions/gradle-8.1-bin.zip'
+new_distribution_url = 'https{ps}://services.gradle.org/distributions/gradle-8.1-bin.zip'.format(ps=path_separator)
 
 expected_java_version = "20.0.2"
 
@@ -80,10 +74,10 @@ app_tsx_path = 'App.tsx'  # Expected for new projects
 app_tsx_original_length = 2605
 
 package_json_path = 'package.json'
-universal_json_path = 'android\\universal.json' # created to specify which apk to extract from apks file
-gradle_properties_path = 'android\\gradle.properties'
-build_gradle_path = 'android\\app\\build.gradle'
-gradle_wrapper_properties_path = 'android\\gradle\\wrapper\\gradle-wrapper.properties'
+universal_json_path = 'android{ps}universal.json'.format(ps=path_separator) # created to specify which apk to extract from apks file
+gradle_properties_path = 'android{ps}gradle.properties'.format(ps=path_separator)
+build_gradle_path = 'android{ps}app{ps}build.gradle'.format(ps=path_separator)
+gradle_wrapper_properties_path = 'android{ps}gradle{ps}wrapper{ps}gradle-wrapper.properties'.format(ps=path_separator)
 
 
 dependencies_to_add = {
@@ -181,10 +175,10 @@ keystore_create_cmd = 'keytool \
 build_apks_cmd = re.sub(r' +',' ',
   'java -jar "{bt}" \
     build-apks \
-    --bundle=app\\build\\outputs\\bundle\\release\\app-release.aab \
-    --output=app\\build\\outputs\\apk\\release\\app-release.apks \
+    --bundle=app{ps}build{ps}outputs{ps}bundle{ps}release{ps}app-release.aab \
+    --output=app{ps}build{ps}outputs{ps}apk{ps}release{ps}app-release.apks \
     --mode=universal \
-    --ks=..\\{keystore_path} \
+    --ks=..{ps}{keystore_path} \
     --ks-pass=pass:{store_password} \
     --ks-key-alias={key_alias} \
     --key-pass=pass:{key_password}'.format(
@@ -192,16 +186,18 @@ build_apks_cmd = re.sub(r' +',' ',
     keystore_path=keystore_path, 
     store_password=store_password,
     key_alias=key_alias,
-    key_password=key_password))
+    key_password=key_password,
+    ps=cmd_argument_separator))
 
 extract_apk_cmd = re.sub(r' +',' ',
   'java -jar "{bt}" \
   extract-apks \
-    --apks=app\\build\\outputs\\apk\\release\\app-release.apks \
-    --output-dir=app\\build\\outputs\\apk\\release\\ \
-    --device-spec=..\\{universal_json_path}'.format(
+    --apks=app{ps}build{ps}outputs{ps}apk{ps}release{ps}app-release.apks \
+    --output-dir=app{ps}build{ps}outputs{ps}apk{ps}release{ps} \
+    --device-spec=..{ps}{universal_json_path}'.format(
     bt=bt, 
-    universal_json_path=universal_json_path
+    universal_json_path=universal_json_path,
+    ps=cmd_argument_separator
  ))
 
 post_config_steps = '''
@@ -218,12 +214,13 @@ $ npx react-native run-android
 
 [to build an APK]
 
-$ cd android && .\\gradlew build && .\\gradlew bundleRelease
+$ cd android && .{ps}gradlew build && .{ps}gradlew bundleRelease
 $ {build_apks_cmd}
 
 $ {extract_apk_cmd}'''.format(
     extract_apk_cmd=extract_apk_cmd,
-    build_apks_cmd=build_apks_cmd
+    build_apks_cmd=build_apks_cmd,
+    ps=cmd_argument_separator
  )
 
 clean_repo_cmd = 'rnc clean --include "android,metro,npm,watchman,yarn"'
@@ -247,7 +244,8 @@ emu = 'emulator'
 
 ### ^^^ NOT INTENDED TO BE CUSTOMIZED ^^^ ###
 
-
+def npm_installed():
+    return shutil.which('npx') != None
 
 def add_signing_config_to_build_gradle(file_path):
     try:
@@ -366,6 +364,23 @@ def add_gradle_java_home(gradle_properties_path, actual_java_home_path):
     except Exception as e:
         print(f"ERROR: {e}")
 
+#  https://stackoverflow.com/questions/319426/how-do-i-do-a-case-insensitive-string-comparison
+def getfile_insensitive(path):
+    directory, filename = os.path.split(path)
+    directory, filename = (directory or '.'), filename.lower()
+    for f in os.listdir(directory):
+        newpath = os.path.join(directory, f)
+        if os.path.exists(newpath) and f.lower() == filename:
+            return newpath
+
+def exists_insensitive(path):
+    return getfile_insensitive(path) is not None
+
+def paths_equal(path1, path2):
+    if running_on_windows:
+        return path1.lower() == path2.lower()
+    else:
+        return path1 == path2
 
 
 
@@ -398,7 +413,7 @@ def errors_in_java_home_and_path():
         # both need to exist, and path must be parent of loc
         # Java in the /bin under the jdk dir
         actual_java_install_path = os.path.dirname(os.path.dirname(java_loc))
-        if actual_java_install_path != java_home_path:
+        if not paths_equal(actual_java_install_path, java_home_path):
             print('FATAL: java executable location does not match up with JAVA_HOME. Fix JAVA_HOME in your environment.')
             errors_occurred = True
     
@@ -519,8 +534,63 @@ def keytool_missing(java_home_path):
         return False
     
     print('FATAL: keytool command not found. Set it in your path.')
-    print('INFO: This is usually in {jdk}\\bin'.format(jdk=java_home_path))
+    print('INFO: This is usually in {jdk}{ps}bin'.format(jdk=java_home_path,ps=path_separator))
     return True
+
+def path_inspected_and_confirmed(java_home,android_sdk_root):
+    existing_path = os.environ.get('PATH').split(';')
+    found_platform_tools = False
+    found_tools = False
+    found_java_bin = False
+    found_another_java_bin = False
+
+    for p in existing_path:
+        lcp = p.lower()
+        if paths_equal(p,os.path.join(android_sdk_root,'platform-tools')):
+            found_platform_tools = True
+        elif paths_equal(p,os.path.join(android_sdk_root,'tools')):
+            found_tools = True
+        elif paths_equal(p,os.path.join(java_home,'bin')):
+            found_java_bin = True
+        elif 'oracle' in lcp:
+            # trying to catch Java's router to installed versions
+            found_another_java_bin = True
+        elif 'jdk' in lcp:
+            # trying to catch windows version
+            found_another_java_bin = True
+        elif 'jbr' in lcp:
+            # trying to catch IntelliJ version
+            found_another_java_bin = True
+            
+        if found_platform_tools and found_tools and found_java_bin:
+            break
+
+    if found_another_java_bin:
+        print('FATAL: Another Java bin directory is in your ahead of the proper JDK.');
+    
+    if not found_java_bin:
+        print('FATAL: Ensure that {java_home}{ps}bin is at the top of your {emphasis}path.'.
+              format(java_home=java_home,
+                     ps=path_separator,
+                     emphasis='SYSTEM ' if running_on_windows else ''))
+        
+    if not found_platform_tools:
+        print('FATAL: Ensure that {android_sdk_root}{ps}platform-tools is at the top of your {emphasis}path.'.
+              format(android_sdk_root=android_sdk_root,
+                     ps=path_separator,
+                     emphasis='SYSTEM ' if running_on_windows else ''))
+        
+    if not found_platform_tools:
+        print('FATAL: Ensure that {android_sdk_root}{ps}tools is at the top of your {emphasis}path.'.
+              format(android_sdk_root=android_sdk_root,
+                     ps=path_separator,
+                     emphasis='SYSTEM ' if running_on_windows else ''))
+        
+    return found_platform_tools and \
+        found_tools and \
+        found_java_bin and \
+        not found_another_java_bin
+
 
 print("*********")
 print('INFO: All output from this script will be logged to {output_file}'.format(output_file=output_file))
@@ -529,7 +599,7 @@ print("*********")
 class Logger(object):
     def __init__(self):
         self.terminal = sys.stdout
-        self.log = open(output_file, "a")
+        self.log = open(output_file, "w")
 
     def write(self, message):
         self.terminal.write(message)
@@ -552,8 +622,13 @@ Note that "WARN:" does not mean "Error", it means "be sure this is correct."
       
             """)
 
+if not npm_installed():
+    print('FATAL: Node.js is not installed (os is not in your PATH).')
+    print('FATAL: Exiting...')
+    exit()
+   
 if errors_in_java_home_and_path():
-    print('INFO: If needed, download and install JDK\n\n     {jv}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(jv=expected_java_version))
+    print('INFO: If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdk_path}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(jv=expected_java_version,jdk_path=jdk_path))
 
     print('FATAL: Exiting...')
     exit()
@@ -566,10 +641,17 @@ if android_home is None and android_sdk_root is None:
     print('FATAL: Exiting...')
     exit()
 
+canonical_java_home_path = os.environ.get('JAVA_HOME')
+osified_java_home_path = canonical_java_home_path.replace('\\','\\\\')
+
 android_sdk_root = android_home if android_home else android_sdk_root
 
 if not exists_insensitive(android_sdk_root):
     print('FATAL: ANDROID_SDK_ROOT variable is set but directory does not exist. Set it CORRECTLY in your environment.')
+    print('FATAL: Exiting...')
+    exit()
+
+if not path_inspected_and_confirmed(canonical_java_home_path,android_sdk_root):
     print('FATAL: Exiting...')
     exit()
 
@@ -633,9 +715,6 @@ if not exists_insensitive(".prettierrc"):
         rc_file.write(prettier_rc)
 
     print("INFO: .prettierrc file created.")
-
-canonical_java_home_path = os.environ.get('JAVA_HOME')
-osified_java_home_path = canonical_java_home_path.replace('\\','\\\\')
 
 add_gradle_java_home(gradle_properties_path, osified_java_home_path)
 

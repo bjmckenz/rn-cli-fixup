@@ -244,6 +244,20 @@ emu = 'emulator'
 
 ### ^^^ NOT INTENDED TO BE CUSTOMIZED ^^^ ###
 
+counts = {
+    'fatal':0,
+    'warn':0,
+    'error':0,
+    'info':0
+}
+
+def print_counts():
+    print('*** Message type counts: {fatal} fatal, {warn} warn, {error} error, {info} info'.format(
+          fatal=counts['fatal'],
+          warn=counts['warn'],
+          error=counts['error'],
+          info=counts['info']))
+
 def npm_installed():
     return shutil.which('npx') != None
 
@@ -265,8 +279,10 @@ def add_signing_config_to_build_gradle(file_path):
             build_gradle_file.write(modified_content)
 
         print("INFO: Build.gradle file updated successfully.")
+        counts['info'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 
 
@@ -287,8 +303,10 @@ def add_keys_to_gradle_properties(properties_file_path):
             properties_file.write(properties_content)
 
         print("INFO: gradle.properties file updated successfully.")
+        counts['info'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 
 
@@ -312,8 +330,10 @@ def update_build_gradle_release_section(gradle_properties_path):
             gradle_properties_file.write(gradle_properties_content)
 
         print("INFO: gradle.properties file updated successfully.")
+        counts['info'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 
 
@@ -333,8 +353,10 @@ def change_gradle_wrapper_distribution_url(prop_path, new_distribution_url):
             wrapper_properties_file.writelines(wrapper_properties_content)
 
         print("INFO: Gradle wrapper distributionUrl updated successfully.")
+        counts['info'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 
 
@@ -361,8 +383,10 @@ def add_gradle_java_home(gradle_properties_path, actual_java_home_path):
             gradle_properties_file.writelines(gradle_properties_content)
 
         print("INFO: org.gradle.java.home added or updated in gradle.properties.")
+        counts['info'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 #  https://stackoverflow.com/questions/319426/how-do-i-do-a-case-insensitive-string-comparison
 def getfile_insensitive(path):
@@ -391,10 +415,13 @@ def create_universal_json(universal_json_path, contents):
                 json.dump(contents, universal_json_file, indent=4)
 
             print(f"INFO: {universal_json_path} file created with contents.")
+            counts['info'] += 1
         else:
             print(f"WARN: {universal_json_path} file already exists.")
+            counts['warn'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 
 def errors_in_java_home_and_path():
@@ -402,11 +429,13 @@ def errors_in_java_home_and_path():
     java_loc = shutil.which('java')
     if not java_loc:
         print('FATAL: java is not in your path. Set it in your environment.')
+        counts['fatal'] += 1
         errors_occurred = True
 
     java_home_path = os.environ.get('JAVA_HOME')
     if not java_home_path:
         print('FATAL: JAVA_HOME is not defined. Set it in your environment.')
+        counts['fatal'] += 1
         errors_occurred = True 
     
     if not errors_occurred:
@@ -415,6 +444,7 @@ def errors_in_java_home_and_path():
         actual_java_install_path = os.path.dirname(os.path.dirname(java_loc))
         if not paths_equal(actual_java_install_path, java_home_path):
             print('FATAL: java executable location does not match up with JAVA_HOME. Fix JAVA_HOME in your environment.')
+            counts['fatal'] += 1
             errors_occurred = True
     
     return errors_occurred
@@ -430,6 +460,7 @@ def correct_version_of_java_installed(version_desired):
             return False
         installed_version = match.group()
         print("INFO: Detected version ",installed_version," of Java.")
+        counts['info'] += 1
         if version_desired in installed_version:
             return True
         else:
@@ -445,7 +476,9 @@ def remove_tsx_and_create_app_js():
 
             if os.path.getsize(app_tsx_path) != app_tsx_original_length:
                 print(f"WARN: {app_tsx_path} has been modified. Is this intentional?")
+                counts['warn'] += 1
                 print(f"INFO: {app_tsx_path} not overwritten.")
+                counts['info'] += 1
                 return
             
             # Remove the existing App.tsx file if it exists
@@ -456,11 +489,15 @@ def remove_tsx_and_create_app_js():
                 app_js_file.write(app_js_content)
 
             print(f"INFO: {app_tsx_path} removed and {app_js_path} created.")
+            counts['info'] += 1
         else:
             print(f"WARN: {app_tsx_path} does not exist.")
+            counts['warn'] += 1
             print(f"INFO: {app_js_path} not modified.")
+            counts['info'] += 1
     except Exception as e:
         print(f"ERROR: {e}")
+        counts['error'] += 1
 
 
 def adjust_package_json(json_path):
@@ -486,22 +523,27 @@ def adjust_package_json(json_path):
             json.dump(package_json_data, package_json_file, indent=2, sort_keys=True)
 
         print("INFO: package.json file adjusted successfully.")
+        counts['info'] += 1
     except Exception as e:
         print(f"WARN: {e}")
+        counts['warn'] += 1
 
 def generate_keystore():
     if exists_insensitive(keystore_path):
       print("WARN: Keystore already exists. (Overwriting it)")
+      counts['warn'] += 1
       os.remove(keystore_path)
 
     try:
       as_args = re.split(r'  +',keystore_create_cmd)
       subprocess.check_output(as_args, stderr=subprocess.STDOUT, text=True)
       print("INFO: Keystore generated successfully.")
+      counts['info'] += 1
 
       return True
     except subprocess.CalledProcessError:
       print("ERROR: Keystore generated failed.")
+      counts['error'] += 1
       return False
 
 def npm_package_version(pkg):
@@ -512,6 +554,7 @@ def npm_package_version(pkg):
 
 def compare_expected_npm_package_versions_to_latest_available():
     print("INFO: Checking [newest published] npm package versions...")
+    counts['info'] += 1
     any_changes = False
     for p in dependencies_to_add.keys():
         compare_to = npm_package_version(p)
@@ -520,21 +563,26 @@ def compare_expected_npm_package_versions_to_latest_available():
 
         if compare_to != dependencies_to_add[p]:
             print('WARN: Expecting version {v} of {p} but found {v2}'.format(v=dependencies_to_add[p], p=p, v2=compare_to))
+            counts['warn'] += 1
             any_changes = True
 
         #print(p,' ',npm_package_version(p))
 
     if any_changes:
         print("INFO: (Tell BJM or write an issue against this script on GitHub)")
+        counts['info'] += 1
 
     print("INFO: ...Done checking npm package versions.")
+    counts['info'] += 1
 
 def keytool_missing(java_home_path):
     if exists_insensitive(os.path.join(java_home_path,'bin','keytool.exe')):
         return False
     
     print('FATAL: keytool command not found. Set it in your path.')
+    counts['fatal'] += 1
     print('INFO: This is usually in {jdk}{ps}bin'.format(jdk=java_home_path,ps=path_separator))
+    counts['info'] += 1
     return True
 
 def path_inspected_and_confirmed(java_home,android_sdk_root):
@@ -543,6 +591,7 @@ def path_inspected_and_confirmed(java_home,android_sdk_root):
     found_tools = False
     found_java_bin = False
     found_another_java_bin = False
+    path_is_good = True
 
     for p in existing_path:
         lcp = p.lower()
@@ -567,33 +616,44 @@ def path_inspected_and_confirmed(java_home,android_sdk_root):
 
     if found_another_java_bin:
         print('FATAL: Another Java bin directory is in your ahead of the proper JDK.');
+        counts['fatal'] += 1
+        path_is_good = False
     
     if not found_java_bin:
         print('FATAL: Ensure that {java_home}{ps}bin is at the top of your {emphasis}path.'.
               format(java_home=java_home,
                      ps=path_separator,
                      emphasis='SYSTEM ' if running_on_windows else ''))
+        counts['fatal'] += 1
+        path_is_good = False
         
     if not found_platform_tools:
         print('FATAL: Ensure that {android_sdk_root}{ps}platform-tools is at the top of your {emphasis}path.'.
               format(android_sdk_root=android_sdk_root,
                      ps=path_separator,
                      emphasis='SYSTEM ' if running_on_windows else ''))
+        counts['fatal'] += 1
+        path_is_good = False
         
-    if not found_platform_tools:
+    if not found_tools:
         print('FATAL: Ensure that {android_sdk_root}{ps}tools is at the top of your {emphasis}path.'.
               format(android_sdk_root=android_sdk_root,
                      ps=path_separator,
                      emphasis='SYSTEM ' if running_on_windows else ''))
-        
-    return found_platform_tools and \
-        found_tools and \
-        found_java_bin and \
-        not found_another_java_bin
+        counts['fatal'] += 1
+        path_is_good = False
+    
+    if path_is_good:
+        print('INFO: sdk and jdk paths appear to be good.')
+        counts['info'] += 1
+
+    return path_is_good
+
 
 
 print("*********")
 print('INFO: All output from this script will be logged to {output_file}'.format(output_file=output_file))
+counts['info'] += 1
 print("*********")
 
 class Logger(object):
@@ -622,23 +682,40 @@ Note that "WARN:" does not mean "Error", it means "be sure this is correct."
       
             """)
 
-if not npm_installed():
+if npm_installed():
+    print('INFO: Found npm.')
+    counts['info'] += 1
+else:
     print('FATAL: Node.js is not installed (os is not in your PATH).')
     print('FATAL: Exiting...')
+    counts['fatal'] += 2
+    print_counts()
     exit()
    
-if errors_in_java_home_and_path():
+if not errors_in_java_home_and_path():
+    print('INFO: JAVA_HOME appears to match up with path.')
+    counts['info'] += 1
+else:
     print('INFO: If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdk_path}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(jv=expected_java_version,jdk_path=jdk_path))
+    counts['info'] += 1
 
     print('FATAL: Exiting...')
+    counts['fatal'] += 1
+    print_counts()
     exit()
 
 
-if android_home is None and android_sdk_root is None:
+if android_home or android_sdk_root:
+    print('INFO: Found Android SDK location.')
+    counts['info'] += 1
+else:
     print('FATAL: ANDROID_HOME and ANDROID_SDK_ROOT are not defined. Set at least one in your environment.')
     print("INFO: This may indicate you haven't downloaded the ANDROID SDK yet." )
     print('INFO: Download the Android SDK from https://developer.android.com/studio')
     print('FATAL: Exiting...')
+    counts['fatal'] += 2
+    counts['info'] += 2
+    print_counts()
     exit()
 
 canonical_java_home_path = os.environ.get('JAVA_HOME')
@@ -646,63 +723,112 @@ osified_java_home_path = canonical_java_home_path.replace('\\','\\\\')
 
 android_sdk_root = android_home if android_home else android_sdk_root
 
-if not exists_insensitive(android_sdk_root):
+if exists_insensitive(android_sdk_root):
+    print('INFO: Android SDK appears to exist.')
+    counts['info'] += 1
+else:
     print('FATAL: ANDROID_SDK_ROOT variable is set but directory does not exist. Set it CORRECTLY in your environment.')
     print('FATAL: Exiting...')
+    counts['fatal'] += 2
+    print_counts()
     exit()
 
 if not path_inspected_and_confirmed(canonical_java_home_path,android_sdk_root):
     print('FATAL: Exiting...')
+    counts['fatal'] += 1
+    print_counts()
     exit()
 
 error_count = 0
 
-if not exists_insensitive(bt):
+if exists_insensitive(bt):
+    print('INFO: Found bundletool.')
+    counts['info'] += 1
+else:
     print('FATAL: bundletool.jar does not exist. Please specify the correct path to it.')
     print('INFO: Download it from {bt_loc}'.format(bt_loc=bt_loc))
     print('INFO: And ideally copy it to {bt}'.format(bt=bt))
+    counts['fatal'] += 1
+    counts['info'] += 2
     error_count += 1
 
-if not exists_insensitive(package_json_path):
+if exists_insensitive(package_json_path):
+    print('INFO: We are really in a NPM project.')
+    counts['info'] += 1
+else:
     print('FATAL: package.json does not exist. Run this from an initialized project directory.')
+    counts['fatal'] += 1
     error_count += 1
 
-if not exists_insensitive("android"):
+if exists_insensitive("android"):
+    print('INFO: We are really in a React-native project.')
+    counts['info'] += 1
+else:
     print('FATAL: "android" does not exist. This does not appear to be a React-Native project dir.')
+    counts['fatal'] += 1
     error_count += 1
 
-if not exists_insensitive(os.path.join(android_sdk_root,cmdline_tools_path)):
-    print(os.path.join(android_sdk_root,cmdline_tools_path))
+if exists_insensitive(os.path.join(android_sdk_root,cmdline_tools_path)):
+    print('INFO: Command-line tools are in path.')
+    counts['info'] += 1
+else:
+    # print(os.path.join(android_sdk_root,cmdline_tools_path))
     print('FATAL: Command-line tools (latest) are not installed in Android SDK.')
+    counts['fatal'] += 1
     error_count += 1
 
-if not exists_insensitive(os.path.join(android_sdk_root,'ndk',ndk_version)):
+if exists_insensitive(os.path.join(android_sdk_root,'ndk',ndk_version)):
+    print('INFO: Correct NDK is installed.')
+    counts['info'] += 1
+else:
     print('FATAL: Android SDK NDK version {ndk_version} not installed.'.format(ndk_version=ndk_version))
+    counts['fatal'] += 1
     error_count += 1
 
+all_build_tools_exist = True
 for btv in build_tools_versions:
     if not exists_insensitive(os.path.join(android_sdk_root,'build-tools',btv)):
         print('FATAL: Android SDK build-tools version {btv} not installed.'.format(btv=btv))
+        counts['fatal'] += 1
         error_count += 1
+        all_build_tools_exist = False
 
-if not shutil.which(adb_command):
+if all_build_tools_exist:
+    print('INFO: All build-tools versions exist.')
+    counts['info'] += 1
+
+
+if shutil.which(adb_command):
+    print('INFO: Found adb.')
+    counts['info'] += 1
+else:
     print('FATAL: adb command not found. Set it in your path (install platform-tools if needed).')
+    counts['fatal'] += 1
     error_count += 1
 
 if error_count > 0:
     print('FATAL: Exiting...')
+    counts['fatal'] += 1
+    print_counts()
     exit()
 
-if not shutil.which(emu):
+if shutil.which(emu):
+    print('INFO: Found emulator.')
+    counts['info'] += 1
+else:
     print('WARN: Emulator not found. Did you intend to install it?')
+    counts['warn'] += 1
 
 # Call the function to check if Java 20 is installed
 if correct_version_of_java_installed(expected_java_version):
     print("INFO: Correct version of java installed.")
+    counts['info'] += 1
 else:
     print('ERROR: Go download and install JDK {jv}, and make sure it is in your path.'.format(jv=expected_java_version))
+    counts['error'] += 1
 
     print('INFO: Download link: {jdk_path}'.format(jdk_path=jdk_path))
+    counts['info'] += 1
 
 compare_expected_npm_package_versions_to_latest_available()
 
@@ -710,11 +836,16 @@ adjust_package_json(package_json_path)
 
 remove_tsx_and_create_app_js()
 
-if not exists_insensitive(".prettierrc"):
+if exists_insensitive(".prettierrc"):
+    print('INFO: Found existing .prettierrc, so not modifying it.')
+    counts['info'] += 1
+else:
+
     with open('.prettierrc', 'w') as rc_file:
         rc_file.write(prettier_rc)
 
     print("INFO: .prettierrc file created.")
+    counts['info'] += 1
 
 add_gradle_java_home(gradle_properties_path, osified_java_home_path)
 
@@ -728,11 +859,19 @@ add_signing_config_to_build_gradle(build_gradle_path)
 
 update_build_gradle_release_section(gradle_properties_path)
 
-if keytool_missing(osified_java_home_path):
+if not keytool_missing(osified_java_home_path):
+    print('INFO: Found keytool.')
+    counts['info'] += 1
+else:
     print('FATAL: Exiting...')
+    counts['fatal'] += 1
+    print_counts()
     exit()
  
 generate_keystore()
 
 print("\nINFO: Be sure to:",post_config_steps)
 print('\nINFO: Remember: output from this script is in {output_file}'.format(output_file=output_file))
+counts['info'] += 2
+
+print_counts()

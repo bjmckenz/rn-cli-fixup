@@ -8,10 +8,13 @@ import sys
 import platform
 import argparse
 from urllib.request import urlopen
-from inspect import currentframe, getframeinfo
+from inspect import currentframe
 
 
 # This script is intended to be run from the root of a React Native project directory.
+
+### TO DO
+# TODO: Handle Mac/Linux
 
 # ENVIRONMENTY STUFF
 
@@ -346,7 +349,7 @@ def set_up_config():
     parser = argparse.ArgumentParser(description="React-Native CLI Fixer-Upper",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-f", "--force", action="store_true",
-                        help="continue even if tests fail")
+                        help="continue even if after FATAL error")
     parser.add_argument("-q", "--quiet", action='store_true',
                         default=False, help="Shhh! No INFO messages")
     config = vars(parser.parse_args())
@@ -390,6 +393,28 @@ def is_react_native_project():
         return True
     report('fatal', '"android" does not exist. This does not appear to be a React-Native project dir.')
     return False
+
+
+def is_react_native_cli_project():
+    with open(package_json_path, 'r') as package_json_file:
+        package_json_data = json.load(package_json_file)
+        dependencies = package_json_data.get("dependencies", {})
+        if dependencies.get("expo", None) == None:
+            report('info', 'Comfirmed: this is a CLI project.')
+            return True
+        report('fatal', 'expo is a dependency. This appears to be an expo project, not a React-Native CLI project dir.')
+        return False
+
+
+def is_not_formerly_expo_project():
+    with open(package_json_path, 'r') as package_json_file:
+        package_json_data = json.load(package_json_file)
+        dependencies = package_json_data.get("dependencies", {})
+        if dependencies.get("expo-splash-screen", None) == None:
+            report('info', 'Comfirmed: this is not an expo rebuild/exported project.')
+            return True
+        report('fatal', 'expo-splash-screen is a dependency. This appears to be an exported (prebuild) expo project, not a true CLI project.')
+        return False
 
 
 def is_adb_present():
@@ -641,7 +666,7 @@ def are_all_build_tools_versions_present():
         missing += 1
 
     if missing == 0:
-        report('info', 'All build-tools versions exist.')
+        report('info', '(All build-tools versions exist.)')
         return True
 
     report('fatal', '{count} versions of build tools are not installed.'.format(
@@ -903,7 +928,8 @@ def tests_of_essentials():
 # True for success, False for failure
 def tests_independent_of_each_other():
     tests = [is_project_under_git, is_npm_project,
-             is_react_native_project, is_adb_present,
+             is_react_native_project, is_react_native_cli_project, 
+             is_not_formerly_expo_project, is_adb_present,
              is_keytool_present, check_for_emulator,
              is_bundletool_installed, is_correct_ndk_installed,
              are_command_line_tools_in_path,

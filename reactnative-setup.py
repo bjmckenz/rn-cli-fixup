@@ -31,7 +31,7 @@ config = {}
 ### vvvv BEGIN CUSTOMIZE vvvv ###
 
 # Specify the path to bundletool.jar
-bt = 'C:{ps}Program Files{ps}bundletool-all-1.15.4.jar'.format(
+bt = 'C:{ps}Program Files{ps}bundletool-all-1.15.5.jar'.format(
     ps=path_separator)
 
 keystore_file = "my-release-key"

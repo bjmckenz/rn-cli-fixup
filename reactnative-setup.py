@@ -31,8 +31,8 @@ config = {}
 ### vvvv BEGIN CUSTOMIZE vvvv ###
 
 # Specify the path to bundletool.jar
-bt = 'C:{ps}Program Files{ps}bundletool-all-1.15.5.jar'.format(
-    ps=path_separator)
+bt_dir = 'C:{ps}Program Files{ps}'.format(ps=path_separator)
+
 
 keystore_file = "my-release-key"
 store_password = "12345678"
@@ -46,14 +46,15 @@ distinguished_name = "CN=MyName, OU=MyOrgUnit, O=MyOrg, L=MyCity, ST=MyStateOrPr
 
 ### vvv NOT INTENDED TO BE CUSTOMIZED (but fix it if needed) vvv ###
 
+bt_jar = 'bundletool-all-1.15.5.jar'
+bt_loc = 'https://github.com/google/bundletool'
+
 new_distribution_url = 'https{ps}://services.gradle.org/distributions/gradle-8.1-bin.zip'.format(
     ps=path_separator)
 
 expected_java_version = "20.0.2"
 
 jdk_download_path = "https://www.dropbox.com/scl/fi/hfwwy11wpskpzekh71ztg/jdk-20_windows-x64_bin.exe?rlkey=wkx4wfurf8l2valcqaawztvun"
-
-bt_loc = 'https://github.com/google/bundletool'
 
 signing_config_text = '''
     release {{
@@ -102,8 +103,8 @@ dependencies_to_add = {
     "@react-navigation/native-stack": "^6.9.14",
     "@react-navigation/stack": "^6.3.18",
     "react": "18.2.0",
-    "react-native": "0.72.5",
-    "react-native-gesture-handler": "^2.13.1",
+    "react-native": "0.72.6",
+    "react-native-gesture-handler": "^2.13.2",
     "react-native-reanimated": "^3.5.4",
     "react-native-safe-area-context": "^4.7.2",
     "react-native-screens": "^3.25.0"
@@ -201,7 +202,7 @@ keystore_create_cmd = 'keytool \
 )
 
 build_apks_cmd = re.sub(r' +', ' ',
-                        'java -jar "{bt}" \
+                        'java -jar "{bt_dir}{bt_jar}" \
     build-apks \
     --bundle=app{ps}build{ps}outputs{ps}bundle{ps}release{ps}app-release.aab \
     --output=app{ps}build{ps}outputs{ps}apk{ps}release{ps}app-release.apks \
@@ -210,7 +211,8 @@ build_apks_cmd = re.sub(r' +', ' ',
     --ks-pass=pass:{store_password} \
     --ks-key-alias={key_alias} \
     --key-pass=pass:{key_password}'.format(
-                            bt=bt,
+                            bt_dir=bt_dir,
+                            bt_jar=bt_jar,
                             keystore_path=keystore_path,
                             store_password=store_password,
                             key_alias=key_alias,
@@ -218,12 +220,13 @@ build_apks_cmd = re.sub(r' +', ' ',
                             ps=cmd_argument_separator))
 
 extract_apk_cmd = re.sub(r' +', ' ',
-                         'java -jar "{bt}" \
+                         'java -jar "{bt_dir}{bt_jar}" \
   extract-apks \
     --apks=app{ps}build{ps}outputs{ps}apk{ps}release{ps}app-release.apks \
     --output-dir=app{ps}build{ps}outputs{ps}apk{ps}release{ps} \
     --device-spec=..{ps}{universal_json_path}'.format(
-                             bt=bt,
+                             bt_dir=bt_dir,
+                             bt_jar=bt_jar,
                              universal_json_path=universal_json_path,
                              ps=cmd_argument_separator
                          ))
@@ -400,7 +403,7 @@ def is_react_native_cli_project():
         package_json_data = json.load(package_json_file)
         dependencies = package_json_data.get("dependencies", {})
         if dependencies.get("expo", None) == None:
-            report('info', 'Comfirmed: this is a CLI project.')
+            report('info', 'Confirmed: this is a CLI project.')
             return True
         report('fatal', 'expo is a dependency. This appears to be an expo project, not a React-Native CLI project dir.')
         return False
@@ -411,7 +414,7 @@ def is_not_formerly_expo_project():
         package_json_data = json.load(package_json_file)
         dependencies = package_json_data.get("dependencies", {})
         if dependencies.get("expo-splash-screen", None) == None:
-            report('info', 'Comfirmed: this is not an expo rebuild/exported project.')
+            report('info', 'Confirmed: this is not an expo rebuild/exported project.')
             return True
         report('fatal', 'expo-splash-screen is a dependency. This appears to be an exported (prebuild) expo project, not a true CLI project.')
         return False
@@ -450,13 +453,14 @@ def check_for_emulator():
 
 
 def is_bundletool_installed():
-    if exists_insensitive(bt):
-        report('info', 'Found bundletool.')
+    if exists_insensitive(bt_dir+bt_jar):
+        report('info', 'Found current version of bundletool.')
         return True
 
-    report('fatal', 'bundletool.jar does not exist. Please specify the correct path to it.')
+    report('fatal', 'Current version of bundletool.jar does not exist. Please specify the correct path to it.')
+    report('info', 'The current (known) version is {bt_jar}'.format(bt_jar=bt_jar))
     report('info', 'Download it from {bt_loc}'.format(bt_loc=bt_loc))
-    report('info', 'And ideally copy it to {bt}'.format(bt=bt))
+    report('info', 'And copy it to {bt_dir}'.format(bt_dir=bt_dir))
     return False
 
 
@@ -666,7 +670,7 @@ def are_all_build_tools_versions_present():
         missing += 1
 
     if missing == 0:
-        report('info', '(All build-tools versions exist.)')
+        report('info', '(All build-tools versions exist)')
         return True
 
     report('fatal', '{count} versions of build tools are not installed.'.format(

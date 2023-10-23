@@ -98,16 +98,16 @@ script_output_file = 'reactnative-fixup.txt'
 
 dependencies_to_add = {
     "@react-native-masked-view/masked-view": "^0.3.0",
-    "@react-navigation/drawer": "^6.6.5",
-    "@react-navigation/native": "^6.1.9",
-    "@react-navigation/native-stack": "^6.9.15",
-    "@react-navigation/stack": "^6.3.19",
+    "@react-navigation/drawer": "^6.6.4",
+    "@react-navigation/native": "^6.1.8",
+    "@react-navigation/native-stack": "^6.9.14",
+    "@react-navigation/stack": "^6.3.18",
     "react": "18.2.0",
     "react-native": "0.72.6",
-    "react-native-gesture-handler": "^2.13.3",
+    "react-native-gesture-handler": "^2.13.2",
     "react-native-reanimated": "^3.5.4",
-    "react-native-safe-area-context": "^4.7.3",
-    "react-native-screens": "^3.26.0"
+    "react-native-safe-area-context": "^4.7.2",
+    "react-native-screens": "^3.25.0"
 }
 
 # Define the contents for universal.json

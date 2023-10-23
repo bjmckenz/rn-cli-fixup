@@ -271,7 +271,7 @@ adb_command = 'adb'
 emu = 'emulator'
 
 java_home = os.environ.get('JAVA_HOME')
-osified_java_home_path = java_home.replace('\\', '\\\\')
+osified_java_home_path = java_home.replace('\\', '\\\\') if java_home else None
 
 
 ### ^^^ NOT INTENDED TO BE CUSTOMIZED ^^^ ###
@@ -427,7 +427,6 @@ def is_adb_present():
     report('fatal', 'adb command not found. Set it in your path (install platform-tools if needed).')
     return False
 
-
 def is_keytool_present():
     if shutil.which('keytool') != None:
         report('info', 'keytool is in path.')
@@ -480,7 +479,7 @@ def is_java_home_valid():
     if not java_home:
         report('fatal', 'JAVA_HOME is not defined. Set it in your environment.')
         report('info',
-               'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(
+               'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set in environment variables.'.format(
                    jv=expected_java_version, jdp=jdk_download_path))
         return False
 

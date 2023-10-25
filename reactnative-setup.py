@@ -25,6 +25,7 @@ shell_is_unixy = os.environ.get('SHELL') != None
 # path separator in commands and paths
 path_separator = '\\' if running_on_windows else '/'
 cmd_argument_separator = '/' if shell_is_unixy else '\\'
+path_variable_separator = ';' if running_on_windows else ':'
 
 # From command-line Arguments
 config = {}
@@ -609,7 +610,7 @@ def is_java_from_path_from_java_home():
 
 
 def are_paths_valid():
-    existing_path = os.environ.get('PATH').split(':')
+    existing_path = os.environ.get('PATH').split(path_variable_separator)
     found_platform_tools = False
     found_tools = False
     path_is_good = True

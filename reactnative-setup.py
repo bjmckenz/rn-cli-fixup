@@ -19,6 +19,7 @@ from inspect import currentframe
 # ENVIRONMENTY STUFF
 
 running_on_windows = platform.system() == 'Windows'
+print(running_on_windows)
 shell_is_unixy = os.environ.get('SHELL') != None
 
 # path separator in commands and paths
@@ -31,7 +32,9 @@ config = {}
 ### vvvv BEGIN CUSTOMIZE vvvv ###
 
 # Specify the path to bundletool.jar
-bt_dir = 'C:{ps}Program Files{ps}'.format(ps=path_separator)
+bt_dir = 'C:{ps}Program Files{ps}'.format(ps=path_separator) if running_on_windows \
+    else '{home}{ps}Library{ps}'.format(home=os.environ.get('HOME'),ps=path_separator)
+
 
 
 keystore_file = "my-release-key"
@@ -49,12 +52,12 @@ distinguished_name = "CN=MyName, OU=MyOrgUnit, O=MyOrg, L=MyCity, ST=MyStateOrPr
 bt_jar = 'bundletool-all-1.15.5.jar'
 bt_loc = 'https://github.com/google/bundletool'
 
-new_distribution_url = 'https{ps}://services.gradle.org/distributions/gradle-8.1-bin.zip'.format(
+new_distribution_url = 'https://services.gradle.org/distributions/gradle-8.1-bin.zip'.format(
     ps=path_separator)
 
 expected_java_version = "20.0.2"
 
-jdk_download_path = "https://www.dropbox.com/scl/fi/hfwwy11wpskpzekh71ztg/jdk-20_windows-x64_bin.exe?rlkey=wkx4wfurf8l2valcqaawztvun"
+jdk_download_path = "https://jdk.java.net/archive/"
 
 signing_config_text = '''
     release {{
@@ -245,7 +248,16 @@ $ npx react-native run-android
 $ cd android && .{ps}gradlew build && .{ps}gradlew bundleRelease
 $ {build_apks_cmd}
 
-$ {extract_apk_cmd}'''.format(
+$ {extract_apk_cmd}
+
+[to build on Mac for IOS]
+
+*Before* your first build (or after you install a new NPM package) you must:
+
+$ sudo gem update cocoapods --pre
+$ cd ios && pod update && cd ..
+
+'''.format(
     extract_apk_cmd=extract_apk_cmd,
     build_apks_cmd=build_apks_cmd,
     ps=cmd_argument_separator
@@ -271,7 +283,8 @@ adb_command = 'adb'
 emu = 'emulator'
 
 java_home = os.environ.get('JAVA_HOME')
-osified_java_home_path = java_home.replace('\\', '\\\\') if java_home else None
+osified_java_home_path = java_home.replace('\\', '\\\\') if java_home \
+    else None
 
 
 ### ^^^ NOT INTENDED TO BE CUSTOMIZED ^^^ ###
@@ -331,6 +344,12 @@ def current_version_of_npm_package(pkg):
     response = urlopen(url)
     package_json = json.loads(response.read())
     return package_json['version']
+
+def brew_recipe_installed(item):
+    brew_output = subprocess.check_output(
+            ["brew", "info", item], stderr=subprocess.STDOUT, text=True)
+
+    return 'Not installed' not in brew_output
 
 # Logger Class tees all output to output file
 
@@ -408,6 +427,18 @@ def is_react_native_cli_project():
         report('fatal', 'expo is a dependency. This appears to be an expo project, not a React-Native CLI project dir.')
         return False
 
+def is_homebrew_installed():
+    if running_on_windows:
+        report('info','(homebrew is not required on Windows)');
+        return True
+
+    if shutil.which('brew') != None:
+        report('info','brew exists.');
+        return True
+    
+    report('fatal','Brew is necessary for Mac development but is not installed.')
+    report('info','Install it as shown at https://brew.sh/')
+    return False
 
 def is_not_formerly_expo_project():
     with open(package_json_path, 'r') as package_json_file:
@@ -420,11 +451,74 @@ def is_not_formerly_expo_project():
         return False
 
 
+def is_cocoapods_present():
+    if running_on_windows:
+        report('info','(Cocoapods is not required on Windows.)')
+        return True
+    
+    if brew_recipe_installed('cocoapods'):
+        report('info', 'Found cocoapods.')
+        return True
+    
+    report('fatal', 'cocoapods not found.')
+    report('info','Install it via: brew install cocoapods')
+    
+    return False
+
+def is_xcode_selected():
+    if running_on_windows:
+        report('info','(xcode-select is not required on Windows.)')
+        return True
+    
+    xcode_sel_output = subprocess.check_output(
+            ["xcode-select", "--print-path"], stderr=subprocess.STDOUT, text=True)
+
+    if xcode_sel_output and '/' in xcode_sel_output:
+        report('info','Xcode has been selected.')
+        return True
+
+    report('fatal', 'It does not appear that Xcode is selected.')
+    report('info','Select it via: sudo xcode-select -s /Applications/Xcode.app')
+    
+    return False
+
+def is_watchman_present():
+    if running_on_windows:
+        report('info','(Watchman is not required on Windows.)')
+        return True
+    
+    if shutil.which('watchman'):
+        report('info', 'Found watchman.')
+        return True
+    
+    report('fatal', 'watchman command not found. Set it in your path).')
+    report('info','It is easiest to do: brew install watchman (and make sure /opt/homebrew/bin is in your PATH)')
+    
+    return False
+
+def is_ios_deploy_present():
+    if running_on_windows:
+        report('info','(ios-deploy is not required on Windows.)')
+        return True
+    
+    if shutil.which('ios-deploy'):
+        report('info', 'Found ios-deploy.')
+        return True
+    
+    report('fatal', 'ios-deploy command not found. Set it in your path).')
+    report('info','It is easiest to do: brew install ios-deploy (and make sure /opt/homebrew/bin is in your PATH)')
+    
+    return False
+
+
 def is_adb_present():
     if shutil.which(adb_command):
         report('info', 'Found adb.')
         return True
+    
     report('fatal', 'adb command not found. Set it in your path (install platform-tools if needed).')
+    if not running_on_windows:
+        report('info','On Mac, it is easiest to do: brew install android-platform-tools (and make sure /opt/homebrew/bin is in your PATH)')
     return False
 
 def is_keytool_present():
@@ -452,6 +546,12 @@ def check_for_emulator():
 
 
 def is_bundletool_installed():
+    if not os.path.exists(bt_dir):
+        report('fatal', 'Expected location of bundletool ({bt_dir}) does not exist.. Please specify the correct path to it or create it.'.format(
+            bt_dir=bt_dir
+        ))
+        return False
+
     if exists_insensitive(bt_dir+bt_jar):
         report('info', 'Found current version of bundletool.')
         return True
@@ -471,6 +571,8 @@ def is_java_in_path():
     report('fatal', 'java is not in your path. Set it in your environment.')
     report('info', 'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(
         jv=expected_java_version, jdp=jdk_download_path))
+    if not running_on_windows:
+        report('warn','on Mac, JAVA_HOME is not the location of the JDK, but the /Contents/Home directory under it.')
 
     return False
 
@@ -495,13 +597,11 @@ def is_java_home_valid():
 
 
 def is_java_from_path_from_java_home():
-    # Java in the /bin under the jdk dir
+    # Java under the jdk dir
     java_executable_location = shutil.which('java')
-    potentially_java_home_slash_bin = os.path.dirname(java_executable_location)
-    potentially_java_home = os.path.dirname(potentially_java_home_slash_bin)
 
-    if paths_equal(potentially_java_home, java_home):
-        report('info', 'java executable location matches up with JAVA_HOME/bin.')
+    if java_executable_location.startswith(java_home):
+        report('info', 'java executable location matches up with JAVA_HOME.')
         return True
 
     report('fatal', 'java executable location does not match up with JAVA_HOME. Fix JAVA_HOME in your environment.')
@@ -509,11 +609,9 @@ def is_java_from_path_from_java_home():
 
 
 def are_paths_valid():
-    existing_path = os.environ.get('PATH').split(';')
+    existing_path = os.environ.get('PATH').split(':')
     found_platform_tools = False
     found_tools = False
-    found_java_bin = False
-    found_another_java_bin = False
     path_is_good = True
 
     for p in existing_path:
@@ -522,31 +620,9 @@ def are_paths_valid():
             found_platform_tools = True
         elif paths_equal(p, os.path.join(android_sdk_root, 'tools')):
             found_tools = True
-        elif paths_equal(p, os.path.join(java_home, 'bin')):
-            found_java_bin = True
-        elif 'oracle' in lcp:
-            # trying to catch Java's router to installed versions
-            found_another_java_bin = True
-        elif 'jdk' in lcp:
-            # trying to catch windows version
-            found_another_java_bin = True
-        elif 'jbr' in lcp:
-            # trying to catch IntelliJ version
-            found_another_java_bin = True
 
-        if found_platform_tools and found_tools and found_java_bin:
+        if found_platform_tools and found_tools:
             break
-
-    if found_another_java_bin:
-        report('fatal', 'Another Java bin directory is in your ahead of the proper JDK.')
-        path_is_good = False
-
-    if not found_java_bin:
-        report('fatal', 'Ensure that {java_home}{ps}bin is at the top of your {emphasis}path.'.
-               format(java_home=java_home,
-                      ps=path_separator,
-                      emphasis='SYSTEM ' if running_on_windows else ''))
-        path_is_good = False
 
     if not found_platform_tools:
         report('fatal', 'Ensure that {android_sdk_root}{ps}platform-tools is at the top of your {emphasis}path.'.
@@ -914,7 +990,7 @@ def tests_of_essentials():
     tests = [is_npm_installed, is_java_home_valid,
              is_java_in_path, is_correct_version_of_java_installed,
              is_java_from_path_from_java_home, are_paths_valid,
-             is_android_sdk_installed,]
+             is_android_sdk_installed,is_homebrew_installed]
 
     all_successful = True
     for test in tests:
@@ -933,6 +1009,7 @@ def tests_independent_of_each_other():
     tests = [is_project_under_git, is_npm_project,
              is_react_native_project, is_react_native_cli_project, 
              is_not_formerly_expo_project, is_adb_present,
+             is_watchman_present, is_ios_deploy_present, is_cocoapods_present, is_xcode_selected,
              is_keytool_present, check_for_emulator,
              is_bundletool_installed, is_correct_ndk_installed,
              are_command_line_tools_in_path,

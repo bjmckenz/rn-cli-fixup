@@ -396,10 +396,9 @@ def is_project_under_git():
         report('info', 'Project is git-controlled.')
         return True
 
-    report('warn', 'This project is NOT under git management')
+    report('fatal', 'This project is NOT under git management (!)')
     report('info', 'do "git init", "git add ." and "git commit -m\'Initial commit\'"')
-    # Not technically an error...
-    return True
+    return False
 
 
 def is_npm_project():
@@ -753,6 +752,17 @@ def are_all_build_tools_versions_present():
         count=missing))
     return False
 
+def is_mac_java_version_set():
+    if running_on_windows:
+        report('info','(JAVA_VERSION is not needed for Windows)')
+        return True
+    
+    if os.environ.get('JAVA_VERSION') == expected_java_version:
+        report('info','JAVA_VERSION is set correctly.')
+        return True
+
+    report('FATAL','Environment var JAVA_VERSION must be set to {jv} (probably in ~/.zshrc)'.format(jv=expected_java_version))
+    return False
 
 # BEGIN MODIFICATIONS
 
@@ -1013,7 +1023,7 @@ def tests_independent_of_each_other():
              is_watchman_present, is_ios_deploy_present, is_cocoapods_present, is_xcode_selected,
              is_keytool_present, check_for_emulator,
              is_bundletool_installed, is_correct_ndk_installed,
-             are_command_line_tools_in_path,
+             are_command_line_tools_in_path, is_mac_java_version_set,
              are_all_build_tools_versions_present]
     all_successful = True
     for test in tests:

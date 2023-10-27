@@ -9,7 +9,7 @@ import platform
 import argparse
 from urllib.request import urlopen
 from inspect import currentframe
-
+import json
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -93,12 +93,14 @@ package_json_path = 'package.json'
 universal_json_path = 'android{ps}universal.json'.format(ps=path_separator)
 gradle_properties_path = 'android{ps}gradle.properties'.format(
     ps=path_separator)
-build_gradle_path = 'android{ps}app{ps}build.gradle'.format(ps=path_separator)
+build_gradle_path = 'android{ps}build.gradle'.format(ps=path_separator)
+app_build_gradle_path = 'android{ps}app{ps}build.gradle'.format(ps=path_separator)
 gradle_wrapper_properties_path = 'android{ps}gradle{ps}wrapper{ps}gradle-wrapper.properties'.format(
     ps=path_separator)
 
 script_output_file = 'reactnative-fixup.txt'
 
+kotlinVersion = "1.6.0"
 
 dependencies_to_add = {
     "@react-native-masked-view/masked-view": "^0.3.0",
@@ -351,6 +353,40 @@ def brew_recipe_installed(item):
             ["brew", "info", item], stderr=subprocess.STDOUT, text=True)
 
     return 'Not installed' not in brew_output
+
+def read_gradle_file(file_path):
+    try:
+        with open(file_path, 'r') as gradle_config:
+            content = gradle_config.read()
+            objstack = [ [] ]
+            for line in map(str.strip, content.splitlines()):
+                if line == '}':
+                    objstack.pop()
+                elif len(line) and (line[0] == '*' or line.startswith('/*') or line.startswith('//')):
+                    # hack for comments -- not really very good but hopefully adequate
+                    objstack[len(objstack)-1].append({'line':line})
+                elif line.endswith('{'):
+                    sub = { 'key': line.split(' ')[0], 'contents':[] }
+                    objstack[len(objstack)-1].append(sub)
+                    objstack.append(sub['contents'])
+                else:
+                    objstack[len(objstack)-1].append({'line':line})
+        return objstack[0]
+
+    except Exception as e:
+        report('error', f"{e}")
+
+def gradle_config_as_str(contents,level=0):
+    lines = []
+    for element in contents:
+        if 'line' in element:
+            lines.append(('    '* level + element['line']).rstrip())
+        else:
+            lines.append(('    '*level + element['key'] + ' {').rstrip() )
+            lines.append(gradle_config_as_str(element['contents'],level+1))
+            lines.append('    '*level + '}')
+
+    return '\n'.join(lines) + ('\n' if level==0 else '')
 
 # Logger Class tees all output to output file
 
@@ -766,11 +802,35 @@ def is_mac_java_version_set():
 
 # BEGIN MODIFICATIONS
 
-
-def add_signing_config_to_build_gradle(file_path):
+def add_kotlin_version_to_build_gradle(file_path):
     try:
-        with open(file_path, 'r') as build_gradle_file:
-            build_gradle_content = build_gradle_file.read()
+        bg = read_gradle_file(file_path)
+
+        # Find buildscript.ext, ensure there is a kotlinVersion
+        # and that it has the correct version
+
+        buildscript = list(filter(lambda x: 'key' in x and x['key'] == 'buildscript', bg))[0]
+        ext = list(filter(lambda x: 'key' in x and x['key'] == 'ext', buildscript['contents']))[0]
+
+        kvs = list(filter(lambda x: 'line' in x and x['line'].startswith('kotlinVersion'), ext['contents']))
+        if len(kvs) and 'line' in kvs[0] and kotlinVersion not in kvs[0]['line']:
+            report('warn', "build.gradle has unexpected "+kvs[0]['line'])
+
+        ext['contents'] = list(filter(lambda x: 'line' not in x or not x['line'].startswith('kotlinVersion'), ext['contents']))
+        ext['contents'].append({'line':'kotlinVersion = "{kv}"'.format(kv=kotlinVersion)})
+
+        with open(file_path, 'w') as gradle_file:
+            gradle_file.write(gradle_config_as_str(bg))
+
+        report('info', "build.gradle file updated successfully with kotlinVersion.")
+    except Exception as e:
+        report('error', f"{e}")
+
+
+def add_signing_config_to_app_build_gradle(file_path):
+    try:
+        with open(file_path, 'r') as app_build_gradle_file:
+            build_gradle_content = app_build_gradle_file.read()
 
             # Check if the signingConfigs section already exists
             if 'signingConfigs {' in build_gradle_content:
@@ -783,10 +843,10 @@ def add_signing_config_to_build_gradle(file_path):
                     r'(buildTypes \{[^\}]*\})', r'signingConfigs {\n' + signing_config_text + r'\1', build_gradle_content, flags=re.DOTALL)
 
         # Write the modified content back to the file
-        with open(file_path, 'w') as build_gradle_file:
-            build_gradle_file.write(modified_content)
+        with open(file_path, 'w') as app_build_gradle_file:
+            app_build_gradle_file.write(modified_content)
 
-        report('info', "Build.gradle file updated successfully.")
+        report('info', "app/build.gradle file updated successfully with signingConfigs.")
     except Exception as e:
         report('error', f"{e}")
 
@@ -810,7 +870,7 @@ def add_keys_to_gradle_properties(properties_file_path):
         report('error', f"{e}")
 
 
-def modify_build_gradle_release_section(gradle_properties_path):
+def modify_gradle_properties(gradle_properties_path):
     try:
         with open(gradle_properties_path, 'r') as gradle_properties_file:
             gradle_properties_content = gradle_properties_file.read()
@@ -1051,9 +1111,11 @@ def modify_project_files():
     modify_gradle_wrapper_distribution_url(
         gradle_wrapper_properties_path, new_distribution_url)
 
-    add_signing_config_to_build_gradle(build_gradle_path)
+    add_kotlin_version_to_build_gradle(build_gradle_path)
 
-    modify_build_gradle_release_section(gradle_properties_path)
+    add_signing_config_to_app_build_gradle(app_build_gradle_path)
+
+    modify_gradle_properties(gradle_properties_path)
 
     create_keystore()
 

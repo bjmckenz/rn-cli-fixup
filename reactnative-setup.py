@@ -15,6 +15,12 @@ import json
 
 ### TO DO
 # TODO: Handle Mac/Linux
+# https://blog.logrocket.com/react-native-vector-icons-fonts-react-native-app-ui/
+# https://stackoverflow.com/questions/69079963/how-to-set-compilejava-task-11-and-compilekotlin-task-1-8-jvm-target-com
+# react-native-vector-icons
+# pod-install
+# Add decorator for test type/mod
+
 
 # ENVIRONMENTY STUFF
 
@@ -108,6 +114,7 @@ dependencies_to_add = {
     "@react-navigation/native": "^6.1.8",
     "@react-navigation/native-stack": "^6.9.14",
     "@react-navigation/stack": "^6.3.18",
+    "react-native-asset": "^2.1.1",
     "react": "18.2.0",
     "react-native": "0.72.6",
     "react-native-gesture-handler": "^2.13.2",
@@ -273,6 +280,14 @@ android_home = os.environ.get('ANDROID_HOME')
 android_sdk_root = android_home if android_home else os.environ.get(
     'ANDROID_SDK_ROOT')
 
+    
+font_assets_dir = 'assets/fonts'
+react_native_config_path = 'react-native.config.js'
+react_native_config_contents = '''
+module.exports = {
+  assets: ['./assets/fonts'],
+};
+'''
 
 # tests command-line tools
 cmdline_tools_path = 'cmdline-tools/latest/bin'
@@ -1029,6 +1044,26 @@ def modify_package_json_dependencies(json_path):
     except Exception as e:
         report('error', f"{e}")
 
+def create_assets_config():
+    if os.path.exists(font_assets_dir):
+        report('info',f'{font_assets_dir} dir exists already')
+    else:
+        os.makedirs(font_assets_dir)
+        report('info',f'{font_assets_dir} dir created')
+
+    if os.path.exists(react_native_config_path):
+        report('info',f'{react_native_config_path} exists already; not overwritten')
+        return True
+    
+    try:
+        with open(react_native_config_path, 'w') as config_file:
+            config_file.write(react_native_config_contents)
+
+        report('info', f"{react_native_config_path} created.")
+        return True
+    except Exception as e:
+        report('error', f"{e}") 
+        return False
 
 def create_keystore():
     if exists_insensitive(keystore_path):
@@ -1101,6 +1136,8 @@ def modify_project_files():
     remove_tsx_and_create_app_js()
 
     create_prettierrc()
+
+    create_assets_config()
 
     add_gradle_java_home(gradle_properties_path, osified_java_home_path)
 

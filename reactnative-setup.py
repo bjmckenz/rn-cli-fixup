@@ -17,9 +17,10 @@ import json
 # TODO: Handle Mac/Linux
 # https://blog.logrocket.com/react-native-vector-icons-fonts-react-native-app-ui/
 # https://stackoverflow.com/questions/69079963/how-to-set-compilejava-task-11-and-compilekotlin-task-1-8-jvm-target-com
-# react-native-vector-icons
-# pod-install
 # Add decorator for test type/mod
+# Better version of how to fix. Perhaps for each test?
+# ability to disable/ignore/skip each test?
+# Clean up filenames, envvars, file contents    
 
 
 # ENVIRONMENTY STUFF
@@ -169,12 +170,17 @@ app_js_content = """
 import React from 'react';
 import {
   Text,
-  View,
+  SafeAreaView,
 } from 'react-native';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 const App = () => {
   return (
-    <View ><Text>Hello World</Text></View>
+    <SafeAreaProvider>
+      <SafeAreaView>
+        <Text>Hello World</Text>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -245,15 +251,19 @@ extract_apk_cmd = re.sub(r' +', ' ',
                          ))
 
 post_config_steps = '''
+
 $ npm install
+$ npx react-native-asset
 
-Once this is done, you can either/both:
-
+[Then...]
+*sigh* 
 [to run on simulator or connected device]
 
 $ npx react-native run-android
 
 [to build an APK]
+
+$ npx react-native-asset
 
 $ cd android && .{ps}gradlew build && .{ps}gradlew bundleRelease
 $ {build_apks_cmd}
@@ -265,6 +275,7 @@ $ {extract_apk_cmd}
 *Before* your first build (or after you install a new NPM package) you must:
 
 $ sudo gem update cocoapods --pre
+$ npx pod-install
 $ cd ios && pod update && cd ..
 
 '''.format(
@@ -285,7 +296,14 @@ font_assets_dir = 'assets/fonts'
 react_native_config_path = 'react-native.config.js'
 react_native_config_contents = '''
 module.exports = {
-  assets: ['./assets/fonts'],
+    assets: ['./assets/fonts'],
+    dependencies: {
+        'react-native-vector-icons': {
+            platforms: {
+                ios: null,
+            },
+        },
+    },
 };
 '''
 
@@ -438,7 +456,6 @@ def is_npm_installed():
         return True
 
     report('fatal', 'Node.js is not installed (or is not in your PATH).')
-    report('fatal', 'Exiting...')
     return False
 
 
@@ -1167,13 +1184,13 @@ if __name__ == "__main__":
 
     if not tests_of_essentials():
         if not config['force']:
-            report('fatal', 'Exiting...')
+            report('info', 'Exiting...')
             print_counts()
             sys.exit(1)
 
     if not tests_independent_of_each_other():
         if not config['force']:
-            report('fatal', 'Exiting...')
+            report('info', 'Exiting...')
             print_counts()
             sys.exit(1)
 

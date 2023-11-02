@@ -11,6 +11,8 @@ from urllib.request import urlopen
 from inspect import currentframe
 import json
 
+script_version = "1.1"
+
 # This script is intended to be run from the root of a React Native project directory.
 
 ### TO DO
@@ -21,7 +23,7 @@ import json
 # Better version of how to fix. Perhaps for each test?
 # ability to disable/ignore/skip each test?
 # Clean up filenames, envvars, file contents    
-
+# TEST: does NDK still balk if not installed
 
 # ENVIRONMENTY STUFF
 
@@ -56,6 +58,7 @@ distinguished_name = "CN=MyName, OU=MyOrgUnit, O=MyOrg, L=MyCity, ST=MyStateOrPr
 
 
 ### vvv NOT INTENDED TO BE CUSTOMIZED (but fix it if needed) vvv ###
+
 
 bt_jar = 'bundletool-all-1.15.5.jar'
 bt_loc = 'https://github.com/google/bundletool'
@@ -336,11 +339,12 @@ counts = {
 
 
 def print_counts():
-    print('*** Message type counts: {fatal} fatal, {warn} warn, {error} error, {info} info'.format(
+    print('*** ({ver}) Message type counts: {fatal} fatal, {warn} warn, {error} error, {info} info'.format(
           fatal=counts['fatal'],
           warn=counts['warn'],
           error=counts['error'],
-          info=counts['info']))
+          info=counts['info']),
+          ver=script_version)
 
 
 def report(type, message, include_line=True):
@@ -620,6 +624,8 @@ def is_bundletool_installed():
         ))
         return False
 
+    report('info','bundletool destination folder of {bt_dir} exists.'.format(bt_dir=bt_dir))
+    
     if exists_insensitive(bt_dir+bt_jar):
         report('info', 'Found current version of bundletool.')
         return True
@@ -792,10 +798,13 @@ def are_command_line_tools_in_path():
 
 
 def is_correct_ndk_installed():
-    if exists_insensitive(os.path.join(android_sdk_root, 'ndk', ndk_version)):
-        report('info', 'Correct NDK is installed.')
-        return True
-
+    try:
+        if exists_insensitive(os.path.join(android_sdk_root, 'ndk', ndk_version)):
+            report('info', 'Correct NDK is installed.')
+            return True
+    except :
+        pass
+    
     report('fatal', 'Android SDK NDK version {ndk_version} not installed.'.format(
         ndk_version=ndk_version))
     return False

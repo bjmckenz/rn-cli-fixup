@@ -11,7 +11,7 @@ from urllib.request import urlopen
 from inspect import currentframe
 import json
 
-script_version = "1.1"
+script_version = "1.2"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -111,7 +111,7 @@ gradle_wrapper_properties_path = 'android{ps}gradle{ps}wrapper{ps}gradle-wrapper
 
 script_output_file = 'reactnative-fixup.txt'
 
-kotlinVersion = "1.6.0"
+kotlinVersion = "1.7.10"
 
 dependencies_to_add = {
     "@react-native-masked-view/masked-view": "^0.3.0",

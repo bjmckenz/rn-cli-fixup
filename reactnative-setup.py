@@ -23,7 +23,6 @@ script_version = "1.1"
 # Better version of how to fix. Perhaps for each test?
 # ability to disable/ignore/skip each test?
 # Clean up filenames, envvars, file contents    
-# TEST: does NDK still balk if not installed
 
 # ENVIRONMENTY STUFF
 
@@ -32,6 +31,8 @@ print(running_on_windows)
 shell_is_unixy = os.environ.get('SHELL') != None
 
 # path separator in commands and paths
+# FIXME: Should this include "or shell_shell_is_unixy"? diff between commands we run and report a nd what we write in files
+
 path_separator = '\\' if running_on_windows else '/'
 cmd_argument_separator = '/' if shell_is_unixy else '\\'
 path_variable_separator = ';' if running_on_windows else ':'
@@ -343,8 +344,8 @@ def print_counts():
           fatal=counts['fatal'],
           warn=counts['warn'],
           error=counts['error'],
-          info=counts['info']),
-          ver=script_version)
+          info=counts['info'],
+          ver=script_version))
 
 
 def report(type, message, include_line=True):

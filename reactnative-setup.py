@@ -1,33 +1,35 @@
 #!/env/python
-import re
+from inspect import currentframe
+from urllib.request import urlopen
+import argparse
 import json
 import os
-import subprocess
-import shutil
-import sys
 import platform
-import argparse
-from urllib.request import urlopen
-from inspect import currentframe
-import json
+import re
+import shutil
+import subprocess
+import sys
+
+script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
 script_version = "1.2"
 
 # This script is intended to be run from the root of a React Native project directory.
 
 ### TO DO
-# TODO: Handle Mac/Linux
-# https://blog.logrocket.com/react-native-vector-icons-fonts-react-native-app-ui/
-# https://stackoverflow.com/questions/69079963/how-to-set-compilejava-task-11-and-compilekotlin-task-1-8-jvm-target-com
-# Add decorator for test type/mod
-# Better version of how to fix. Perhaps for each test?
-# ability to disable/ignore/skip each test?
-# Clean up filenames, envvars, file contents    
+# TODO: Handle Linux
+# TODO: https://blog.logrocket.com/react-native-vector-icons-fonts-react-native-app-ui/
+# TODO: https://stackoverflow.com/questions/69079963/how-to-set-compilejava-task-11-and-compilekotlin-task-1-8-jvm-target-com
+# TODO: Better version of how to fix. Perhaps for each test?
+# TODO: Clean up filenames, envvars, file contents   
+# TODO: move data to a file 
+# TODO: give revised version of .bashrc/.zshrc
+# TODO: test gitbash on win for shelltype, file PS vs command PS
+# FIXME: only create .prettierrc if the JS version ALSO doesn't exist
 
 # ENVIRONMENTY STUFF
 
 running_on_windows = platform.system() == 'Windows'
-print(running_on_windows)
 shell_is_unixy = os.environ.get('SHELL') != None
 
 # path separator in commands and paths
@@ -39,13 +41,16 @@ path_variable_separator = ';' if running_on_windows else ':'
 
 # From command-line Arguments
 config = {}
+# can be set to false if a test fails
+ok_to_proceed_with_modifications = True
 
 ### vvvv BEGIN CUSTOMIZE vvvv ###
 
 # Specify the path to bundletool.jar
-bt_dir = 'C:{ps}Program Files{ps}'.format(ps=path_separator) if running_on_windows \
-    else '{home}{ps}Library{ps}'.format(home=os.environ.get('HOME'),ps=path_separator)
-
+bt_dir = 'C:{ps}Program Files{ps}'.format(ps=path_separator) \
+    if running_on_windows \
+    else '{home}{ps}Library{ps}'.format(
+        home=os.environ.get('HOME'),ps=path_separator)
 
 
 keystore_file = "my-release-key"
@@ -146,11 +151,11 @@ release_section_text = """
 
 prettier_rc = """
 {
-  "arrowParens": "avoid",
-  "bracketSameLine": true,
-  "bracketSpacing": false,
-  "singleQuote": true,
-  "trailingComma": "all"
+    "arrowParens": "avoid",
+    "bracketSameLine": true,
+    "bracketSpacing": false,
+    "singleQuote": true,
+    "trailingComma": "all"
 }
 """
 
@@ -158,14 +163,14 @@ welcome_message = """
 *******
 This script MAY help you. You *should* have run "npx react-native doctor"
 and fixed the issues first. This may help you with issues there if you can't figure out why doctor is failing.
-      
+
 BUT DO NOT try to run-android without BOTH "doctor" and this script reporting success.
-      
+
 Note that "WARN:" does not mean "Error", it means "be sure this is correct."
 
 All output from this script will be logged to {of}
 *********** 
-      
+
 """.format(of=script_output_file)
 
 # This is the Hello-Worldiest of Hello-World apps.
@@ -173,8 +178,8 @@ app_js_path = 'App.js'  # we create this if we remove App.tsx
 app_js_content = """
 import React from 'react';
 import {
-  Text,
-  SafeAreaView,
+    Text,
+    SafeAreaView,
 } from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
@@ -243,16 +248,16 @@ build_apks_cmd = re.sub(r' +', ' ',
                             ps=cmd_argument_separator))
 
 extract_apk_cmd = re.sub(r' +', ' ',
-                         'java -jar "{bt_dir}{bt_jar}" \
-  extract-apks \
+                        'java -jar "{bt_dir}{bt_jar}" \
+extract-apks \
     --apks=app{ps}build{ps}outputs{ps}apk{ps}release{ps}app-release.apks \
     --output-dir=app{ps}build{ps}outputs{ps}apk{ps}release{ps} \
     --device-spec=..{ps}{universal_json_path}'.format(
-                             bt_dir=bt_dir,
-                             bt_jar=bt_jar,
-                             universal_json_path=universal_json_path,
-                             ps=cmd_argument_separator
-                         ))
+                            bt_dir=bt_dir,
+                            bt_jar=bt_jar,
+                            universal_json_path=universal_json_path,
+                            ps=cmd_argument_separator
+                        ))
 
 post_config_steps = '''
 
@@ -335,17 +340,18 @@ counts = {
     'fatal': 0,
     'warn': 0,
     'error': 0,
-    'info': 0
+    'info': 0,
+    'debug': 0,
 }
 
 
 def print_counts():
     print('*** ({ver}) Message type counts: {fatal} fatal, {warn} warn, {error} error, {info} info'.format(
-          fatal=counts['fatal'],
-          warn=counts['warn'],
-          error=counts['error'],
-          info=counts['info'],
-          ver=script_version))
+        fatal=counts['fatal'],
+        warn=counts['warn'],
+        error=counts['error'],
+        info=counts['info'],
+        ver=script_version))
 
 
 def report(type, message, include_line=True):
@@ -354,11 +360,28 @@ def report(type, message, include_line=True):
     if config['quiet'] and type.lower() == 'info':
         return
 
+    if not config['debug'] and type.lower() == 'debug':
+        return
+
     caller_line = currentframe().f_back.f_lineno
 
     message += ' [{ln}]'.format(ln=caller_line) if include_line else ''
     print('{type}: {message}'.format(type=type.upper(), message=message))
 
+def current_version_of_script():
+    try:
+        for line in urlopen(script_url).read().decode('utf-8').splitlines():
+            if line.strip().startswith('script_version'):
+                return line.split('=')[1].strip().strip('"')
+        report('error','Could not determine current version of script.')
+    except Exception as e:
+        report('error','Could not read current version of script.')
+        print(e)
+        pass
+    return None
+
+def versiontuple(v):
+    return tuple(map(int, (v.split("."))))
 
 #  https://stackoverflow.com/questions/319426/how-do-i-do-a-case-insensitive-string-comparison
 def getfile_insensitive(path):
@@ -369,6 +392,164 @@ def getfile_insensitive(path):
         if os.path.exists(newpath) and f.lower() == filename:
             return newpath
 
+#### Decorators and such that automatically collect operations to run
+
+operations_in_order = []
+operation_named = {}
+
+def operation_prereqs_met(operation):
+    if config['ignore_prerequisites']:
+        return True
+    for prereq_name in operation['prereqs']:
+        # if we didn't run it, or we did and it failed
+        if operation_named[prereq_name]['result'] != True:
+            return False
+    return True
+
+def add_operation(func,attrs):
+    func_name = func.__name__
+    new_op = {
+        'func_name': func_name,
+        'prereqs': [],
+        # Default true for all except show_newest_script_version
+        'to_run': func_name != 'show_newest_script_version',
+        'index': len(operations_in_order),
+        'result': None,
+        **attrs}
+    operation_named[func_name] = new_op
+    operations_in_order.append(new_op)
+    return new_op
+
+def operation(attrs={}):
+    def decorator_internal(func):
+        op = add_operation(func,attrs)
+        def if_prereqs_met(*args, **kwargs):
+            return func(*args, **kwargs) \
+                    if operation_prereqs_met(op) \
+                    else None
+        op['func'] = if_prereqs_met
+        return if_prereqs_met
+    return decorator_internal
+
+def system_test(attrs={}):
+    return operation({'scope':'system','type':'test', **attrs})
+
+def project_test(attrs={}):
+    return operation({'scope':'project','type':'test', **attrs})
+    
+def project_modification(attrs={}):
+    return operation({'scope':'project','type':'modification', **attrs})
+
+##### end decorators for operations
+
+# decorator to wrap a function to be executed only once
+def do_once(func):
+    def wrapper(*args, **kwargs):
+        if not wrapper.has_run:
+            wrapper.has_run = True
+            return func(*args, **kwargs)
+    wrapper.has_run = False
+    return wrapper
+
+def parse_command_line_arguments():
+
+    @do_once
+    def clear_list_of_test_to_run():
+        for op in operations_in_order:
+            if op['type'] == 'test':
+                op['to_run'] = False
+
+    @do_once
+    def clear_list_of_modifications_to_run():
+        for op in operations_in_order:
+            if op['type'] == 'modification':
+                op['to_run'] = False
+
+    class DoTestModule(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            clear_list_of_test_to_run()
+            operation_named[self.dest]['to_run'] = True
+
+    class DoModificationtModule(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            clear_list_of_modifications_to_run()
+            operation_named[self.dest]['to_run'] = True
+
+    class SkipModule(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            operation_named[self.dest]['to_run'] = False
+
+    class NoTests(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            clear_list_of_test_to_run()
+
+    class NoMods(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            clear_list_of_modifications_to_run()
+
+    class NoProject(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            for op in operations_in_order:
+                if op['scope'] == 'project':
+                    op['to_run'] = False
+
+    class NoSystem(argparse.Action):
+        def __call__(self, parse, namespace, values, option_string=None):
+            for op in operations_in_order:
+                if op['scope'] == 'system':
+                    op['to_run'] = False
+
+    parser = argparse.ArgumentParser(description="React-Native CLI Fixer-Upper",
+                                    formatter_class=argparse.
+                                    ArgumentDefaultsHelpFormatter,
+                                    epilog="v{ver} Contact bjmckenz@gmail.com with bugs, questions, and suggestions.".format(ver=script_version))
+    
+    parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction,
+                        default=False, help="Shhh! No INFO messages")
+    
+    parser.add_argument("--debug", action=argparse.BooleanOptionalAction,
+                        default=False, help="Show Debug Messages")
+    
+    parser.add_argument("-f", "--force", action=argparse.BooleanOptionalAction,
+                        default=False,
+                        help="continue even if after an error")
+    
+    parser.add_argument("--ignore-prerequisites", action='store_true',
+                        default=False,
+                        help="run tests regardless of prerequisites")
+    
+    parser.add_argument("--no-tests", action=NoTests, nargs=0,
+                        help="skip all tests")
+    
+    parser.add_argument("--no-project", action=NoProject, nargs=0,
+                        help="skip project-level tests")
+    
+    parser.add_argument("--no-system", action=NoSystem, nargs=0,
+                        help="skip system-level tests")
+    
+    parser.add_argument("--no-mods","--no-modifications", action=NoMods, nargs=0,
+                        help="skip modifications")
+    
+    for op in operations_in_order:
+        parser.add_argument("--do-"+op['func_name'], 
+                            action=DoTestModule if op['type'] == 'test' else DoModificationtModule, 
+                            dest=op['func_name'], nargs=0,
+                            help="run "+op['func_name'])
+        
+        parser.add_argument("--skip-"+op['func_name'], 
+                            action=SkipModule, nargs=0,
+                            dest=op['func_name'],
+                            help="(don't) "+op['func_name'])
+
+    # parser.add_argument("--skip-version-check", action='store_true',
+    #                     default=False,
+    #                     help="skip check for this script's version")
+    
+    config = vars(parser.parse_args())
+    # if operation_named["show_newest_script_version"]['to_run']:
+    #     operation_named['script_version_check']['to_run'] = False
+
+    return config
 
 def exists_insensitive(path):
     return getfile_insensitive(path) is not None
@@ -378,7 +559,6 @@ def paths_equal(path1, path2):
     if running_on_windows:
         return path1.lower() == path2.lower()
     return path1 == path2
-
 
 def current_version_of_npm_package(pkg):
     url = 'https://unpkg.com/{pkg}/package.json'.format(pkg=pkg)
@@ -393,26 +573,22 @@ def brew_recipe_installed(item):
     return 'Not installed' not in brew_output
 
 def read_gradle_file(file_path):
-    try:
-        with open(file_path, 'r') as gradle_config:
-            content = gradle_config.read()
-            objstack = [ [] ]
-            for line in map(str.strip, content.splitlines()):
-                if line == '}':
-                    objstack.pop()
-                elif len(line) and (line[0] == '*' or line.startswith('/*') or line.startswith('//')):
-                    # hack for comments -- not really very good but hopefully adequate
-                    objstack[len(objstack)-1].append({'line':line})
-                elif line.endswith('{'):
-                    sub = { 'key': line.split(' ')[0], 'contents':[] }
-                    objstack[len(objstack)-1].append(sub)
-                    objstack.append(sub['contents'])
-                else:
-                    objstack[len(objstack)-1].append({'line':line})
-        return objstack[0]
-
-    except Exception as e:
-        report('error', f"{e}")
+    with open(file_path, 'r') as gradle_config:
+        content = gradle_config.read()
+        objstack = [ [] ]
+        for line in map(str.strip, content.splitlines()):
+            if line == '}':
+                objstack.pop()
+            elif len(line) and (line[0] == '*' or line.startswith('/*') or line.startswith('//')):
+                # hack for comments -- not really very good but hopefully adequate
+                objstack[len(objstack)-1].append({'line':line})
+            elif line.endswith('{'):
+                sub = { 'key': line.split(' ')[0], 'contents':[] }
+                objstack[len(objstack)-1].append(sub)
+                objstack.append(sub['contents'])
+            else:
+                objstack[len(objstack)-1].append({'line':line})
+    return objstack[0]
 
 def gradle_config_as_str(contents,level=0):
     lines = []
@@ -442,19 +618,50 @@ class Logger(object):
         self.log.flush()
 
 
-def set_up_config():
-    parser = argparse.ArgumentParser(description="React-Native CLI Fixer-Upper",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-f", "--force", action="store_true",
-                        help="continue even if after FATAL error")
-    parser.add_argument("-q", "--quiet", action='store_true',
-                        default=False, help="Shhh! No INFO messages")
-    config = vars(parser.parse_args())
-    return config
-
 
 # BEGIN TESTS
 
+@operation({'scope':'meta','type':'debug'})
+def print_stats():
+    report('debug',"*** CONFIG ***")
+    report('debug',json.dumps(config, indent=4, sort_keys=True))
+    report('debug',"*** OPERATIONS ***")
+    report('debug',json.dumps(list(map(lambda x: {**x, 'func':'<func>'},operations_in_order)), indent=4))
+    return True
+    
+
+@operation({'scope':'meta','type':'meta'})
+def script_version_check():    
+    current_vers = current_version_of_script()
+    if current_vers is None:
+        report('fatal','Could not determine current version of script.')
+        for op in operations_in_order:
+            op['to_run'] = False
+        return False
+
+    #report('info',"Current version of script is {cv}, this version is {dv}".format(cv=current_vers,dv=script_version))
+
+    if versiontuple(current_vers) > versiontuple(script_version):
+        report('fatal','This script (v{dv}) is out of date. Please pull the latest version (v{cv}) from github'.format(dv=script_version,cv=current_vers))
+        sys.exit()
+
+    report('info', 'Script is current version.')
+    return True
+
+
+@operation({'scope':'meta','type':'meta'})
+def show_newest_script_version():
+    current_vers = current_version_of_script()
+    if current_vers is None:
+        report('error','Could not determine current version of script.')
+        sys.exit()
+    
+    report('info','Your version of this script is {this}. Current version on github is {vers}'.format(
+            vers=current_vers, this=script_version))
+    
+    sys.exit()
+
+@system_test()
 def is_npm_installed():
     if shutil.which('npx') != None:
         report('info', 'Found npm.')
@@ -463,43 +670,137 @@ def is_npm_installed():
     report('fatal', 'Node.js is not installed (or is not in your PATH).')
     return False
 
-
-def is_project_under_git():
-    if os.path.exists('.git'):
-        report('info', 'Project is git-controlled.')
-        return True
-
-    report('fatal', 'This project is NOT under git management (!)')
-    report('info', 'do "git init", "git add ." and "git commit -m\'Initial commit\'"')
-    return False
-
-
-def is_npm_project():
-    if exists_insensitive(package_json_path):
-        report('info', 'We are in an NPM project.')
-        return True
-    report('fatal', 'package.json does not exist. Run this from an initialized project directory.')
-    return False
-
-
-def is_react_native_project():
-    if exists_insensitive("android"):
-        report('info', 'We are really in a React-native project.')
-        return True
-    report('fatal', '"android" does not exist. This does not appear to be a React-Native project dir.')
-    return False
-
-
-def is_react_native_cli_project():
-    with open(package_json_path, 'r') as package_json_file:
-        package_json_data = json.load(package_json_file)
-        dependencies = package_json_data.get("dependencies", {})
-        if dependencies.get("expo", None) == None:
-            report('info', 'Confirmed: this is a CLI project.')
-            return True
-        report('fatal', 'expo is a dependency. This appears to be an expo project, not a React-Native CLI project dir.')
+@system_test()
+def is_java_home_valid():
+    if not java_home:
+        report('fatal', 'JAVA_HOME is not defined. Set it in your environment.')
+        report('info',
+                'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set in environment variables.'.format(
+                    jv=expected_java_version, jdp=jdk_download_path))
         return False
 
+    report('info', 'JAVA_HOME is set to {jhp}'.format(
+        jhp=java_home))
+
+    if os.path.exists(java_home):
+        report('info', 'JAVA_HOME points to an existing directory.')
+        return True
+
+    report('fatal', 'JAVA_HOME set, but does not point to an existing directory.')
+    return False
+
+
+@system_test()
+def is_java_in_path():
+    if shutil.which('java') != None:
+        report('info', 'java is in your path.')
+        return True
+
+    report('fatal', 'java is not in your path. Set it in your environment.')
+    report('info', 'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(
+        jv=expected_java_version, jdp=jdk_download_path))
+    if not running_on_windows:
+        report('warn','on Mac, JAVA_HOME is not the location of the JDK, but the /Contents/Home directory under it.')
+
+    return False
+
+@system_test({'prereqs':['is_java_in_path']})
+def is_correct_version_of_java_installed():
+    # Run the "java -version" command and capture the output
+    java_version_output = subprocess.check_output(
+        ["java", "-version"], stderr=subprocess.STDOUT, text=True)
+
+    # Check if the output contains "java version" followed by "20" (exact match)
+    match = re.search(r'"([\d.]+)"', java_version_output)
+    if not match:
+        return False
+    installed_version = match.group()
+
+    report('info', 'Detected version {iv} of Java.'.format(
+        iv=installed_version))
+
+    if expected_java_version in installed_version:
+        report('info', "Java version is correct.")
+        return True
+
+    report('error', 'Go download and install JDK {jv}, and make sure it is in your path.'.format(
+        jv=expected_java_version))
+
+    report('info', 'Download link: {jdk_download_path}'.format(
+        jdk_download_path=jdk_download_path))
+    return False
+
+
+@system_test({'prereqs':['is_java_in_path','is_java_home_valid']})
+def is_java_from_path_from_java_home():
+    # Java under the jdk dir
+    java_executable_location = shutil.which('java')
+
+    if java_executable_location.startswith(java_home):
+        report('info', 'java executable location matches up with JAVA_HOME.')
+        return True
+
+    report('fatal', 'java executable location does not match up with JAVA_HOME. Fix JAVA_HOME in your environment.')
+    return False
+
+
+
+@system_test()
+def is_android_sdk_installed():
+    if not android_sdk_root:
+        report('fatal', 'ANDROID_HOME and ANDROID_SDK_ROOT are not defined. Set at least one in your environment.')
+        report('info', "This may indicate you haven't downloaded the ANDROID SDK yet.")
+        report(
+            'info', 'Download the Android SDK from https://developer.android.com/studio')
+        return False
+
+    report('info', 'Environment var(s) point to an Android SDK location {asdk}.'.format(
+        asdk=android_sdk_root))
+
+    if exists_insensitive(android_sdk_root):
+        report('info', 'Android SDK appears to exist.')
+        return True
+
+    report('fatal', 'ANDROID_SDK_ROOT variable is set but directory does not exist. Set it CORRECTLY in your environment.')
+    return False
+
+@system_test({'prereqs':['is_android_sdk_installed']})
+def are_paths_valid():
+    existing_path = os.environ.get('PATH').split(path_variable_separator)
+    found_platform_tools = False
+    found_tools = False
+    path_is_good = True
+
+    for p in existing_path:
+        lcp = p.lower()
+        if paths_equal(p, os.path.join(android_sdk_root, 'platform-tools')):
+            found_platform_tools = True
+        elif paths_equal(p, os.path.join(android_sdk_root, 'tools')):
+            found_tools = True
+
+        if found_platform_tools and found_tools:
+            break
+
+    if not found_platform_tools:
+        report('fatal', 'Ensure that {android_sdk_root}{ps}platform-tools is at the top of your {emphasis}path.'.
+            format(android_sdk_root=android_sdk_root,
+                    ps=path_separator,
+                    emphasis='SYSTEM ' if running_on_windows else ''))
+        path_is_good = False
+
+    if not found_tools:
+        report('fatal', 'Ensure that {android_sdk_root}{ps}tools is at the top of your {emphasis}path.'.
+            format(android_sdk_root=android_sdk_root,
+                    ps=path_separator,
+                    emphasis='SYSTEM ' if running_on_windows else ''))
+        path_is_good = False
+
+    if path_is_good:
+        report('info', 'SDK and JDK paths appear to be good.')
+
+    return path_is_good
+
+@system_test()
 def is_homebrew_installed():
     if running_on_windows:
         report('info','(homebrew is not required on Windows)');
@@ -513,6 +814,47 @@ def is_homebrew_installed():
     report('info','Install it as shown at https://brew.sh/')
     return False
 
+
+##################################
+
+@project_test()
+def is_project_under_git():
+    if os.path.exists('.git'):
+        report('info', 'Project is git-controlled.')
+        return True
+
+    report('fatal', 'This project is NOT under git management (!)')
+    report('info', 'do "git init", "git add ." and "git commit -m\'Initial commit\'"')
+    return False
+
+@project_test({'prereqs':['is_npm_installed']})
+def is_npm_project():
+    if exists_insensitive(package_json_path):
+        report('info', 'We are in an NPM project.')
+        return True
+    report('fatal', 'package.json does not exist. Run this from an initialized project directory.')
+    return False
+
+@project_test()
+def is_react_native_project():
+    if exists_insensitive("android"):
+        report('info', 'We are really in a React-native project.')
+        return True
+    report('fatal', '"android" does not exist. This does not appear to be a React-Native project dir.')
+    return False
+
+@project_test({'prereqs':['is_react_native_project']})
+def is_react_native_cli_project():
+    with open(package_json_path, 'r') as package_json_file:
+        package_json_data = json.load(package_json_file)
+        dependencies = package_json_data.get("dependencies", {})
+        if dependencies.get("expo", None) == None:
+            report('info', 'Confirmed: this is a CLI project.')
+            return True
+        report('fatal', 'expo is a dependency. This appears to be an expo project, not a React-Native CLI project dir.')
+        return False
+
+@project_test({'prereqs':['is_npm_project']})
 def is_not_formerly_expo_project():
     with open(package_json_path, 'r') as package_json_file:
         package_json_data = json.load(package_json_file)
@@ -523,7 +865,7 @@ def is_not_formerly_expo_project():
         report('fatal', 'expo-splash-screen is a dependency. This appears to be an exported (prebuild) expo project, not a true CLI project.')
         return False
 
-
+@project_test()
 def is_cocoapods_present():
     if running_on_windows:
         report('info','(Cocoapods is not required on Windows.)')
@@ -538,6 +880,7 @@ def is_cocoapods_present():
     
     return False
 
+@system_test()
 def is_xcode_selected():
     if running_on_windows:
         report('info','(xcode-select is not required on Windows.)')
@@ -555,6 +898,7 @@ def is_xcode_selected():
     
     return False
 
+@system_test()
 def is_watchman_present():
     if running_on_windows:
         report('info','(Watchman is not required on Windows.)')
@@ -569,6 +913,7 @@ def is_watchman_present():
     
     return False
 
+@system_test()
 def is_ios_deploy_present():
     if running_on_windows:
         report('info','(ios-deploy is not required on Windows.)')
@@ -583,7 +928,7 @@ def is_ios_deploy_present():
     
     return False
 
-
+@system_test()
 def is_adb_present():
     if shutil.which(adb_command):
         report('info', 'Found adb.')
@@ -594,6 +939,7 @@ def is_adb_present():
         report('info','On Mac, it is easiest to do: brew install android-platform-tools (and make sure /opt/homebrew/bin is in your PATH)')
     return False
 
+@system_test({'prereqs':['is_java_in_path']})
 def is_keytool_present():
     if shutil.which('keytool') != None:
         report('info', 'keytool is in path.')
@@ -604,20 +950,16 @@ def is_keytool_present():
         jdk=java_home, ps=path_separator))
     return True
 
-
-def is_emulator_installed():
-    return shutil.which(emu) != None
-
-
+@system_test()
 def check_for_emulator():
-    if is_emulator_installed():
+    if shutil.which(emu) != None:
         report('info', 'Found emulator.')
         return True
 
     report('warn', 'Emulator not found. Did you intend to install it?')
     return False
 
-
+@system_test()
 def is_bundletool_installed():
     if not os.path.exists(bt_dir):
         report('fatal', 'Expected location of bundletool ({bt_dir}) does not exist.. Please specify the correct path to it or create it.'.format(
@@ -637,119 +979,7 @@ def is_bundletool_installed():
     report('info', 'And copy it to {bt_dir}'.format(bt_dir=bt_dir))
     return False
 
-
-def is_java_in_path():
-    if shutil.which('java') != None:
-        report('info', 'java is in your path.')
-        return True
-
-    report('fatal', 'java is not in your path. Set it in your environment.')
-    report('info', 'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set.'.format(
-        jv=expected_java_version, jdp=jdk_download_path))
-    if not running_on_windows:
-        report('warn','on Mac, JAVA_HOME is not the location of the JDK, but the /Contents/Home directory under it.')
-
-    return False
-
-
-def is_java_home_valid():
-    if not java_home:
-        report('fatal', 'JAVA_HOME is not defined. Set it in your environment.')
-        report('info',
-               'If needed, download and install JDK\n\n     {jv}\n\nfrom\n\n     {jdp}\n\nand make sure it is in your path, and that JAVA_HOME is set in environment variables.'.format(
-                   jv=expected_java_version, jdp=jdk_download_path))
-        return False
-
-    report('info', 'JAVA_HOME is set to {jhp}'.format(
-        jhp=java_home))
-
-    if os.path.exists(java_home):
-        report('info', 'JAVA_HOME points to an existing directory.')
-        return True
-
-    report('fatal', 'JAVA_HOME set, but does not point to an existing directory.')
-    return False
-
-
-def is_java_from_path_from_java_home():
-    # Java under the jdk dir
-    java_executable_location = shutil.which('java')
-
-    if java_executable_location.startswith(java_home):
-        report('info', 'java executable location matches up with JAVA_HOME.')
-        return True
-
-    report('fatal', 'java executable location does not match up with JAVA_HOME. Fix JAVA_HOME in your environment.')
-    return False
-
-
-def are_paths_valid():
-    existing_path = os.environ.get('PATH').split(path_variable_separator)
-    found_platform_tools = False
-    found_tools = False
-    path_is_good = True
-
-    for p in existing_path:
-        lcp = p.lower()
-        if paths_equal(p, os.path.join(android_sdk_root, 'platform-tools')):
-            found_platform_tools = True
-        elif paths_equal(p, os.path.join(android_sdk_root, 'tools')):
-            found_tools = True
-
-        if found_platform_tools and found_tools:
-            break
-
-    if not found_platform_tools:
-        report('fatal', 'Ensure that {android_sdk_root}{ps}platform-tools is at the top of your {emphasis}path.'.
-               format(android_sdk_root=android_sdk_root,
-                      ps=path_separator,
-                      emphasis='SYSTEM ' if running_on_windows else ''))
-        path_is_good = False
-
-    if not found_tools:
-        report('fatal', 'Ensure that {android_sdk_root}{ps}tools is at the top of your {emphasis}path.'.
-               format(android_sdk_root=android_sdk_root,
-                      ps=path_separator,
-                      emphasis='SYSTEM ' if running_on_windows else ''))
-        path_is_good = False
-
-    if path_is_good:
-        report('info', 'SDK and JDK paths appear to be good.')
-
-    return path_is_good
-
-
-def is_correct_version_of_java_installed():
-    try:
-        # Run the "java -version" command and capture the output
-        java_version_output = subprocess.check_output(
-            ["java", "-version"], stderr=subprocess.STDOUT, text=True)
-
-        # Check if the output contains "java version" followed by "20" (exact match)
-        match = re.search(r'"([\d.]+)"', java_version_output)
-        if not match:
-            return False
-        installed_version = match.group()
-
-        report('info', 'Detected version {iv} of Java.'.format(
-            iv=installed_version))
-
-        if expected_java_version in installed_version:
-            report('info', "Java version is correct.")
-            return True
-
-    except subprocess.CalledProcessError:
-        # The "java" command returned a non-zero exit status, indicating Java is not installed or not recognized.
-        pass
-
-    report('error', 'Go download and install JDK {jv}, and make sure it is in your path.'.format(
-        jv=expected_java_version))
-
-    report('info', 'Download link: {jdk_download_path}'.format(
-        jdk_download_path=jdk_download_path))
-    return False
-
-
+@system_test({'prereqs':['is_npm_installed']})
 def compare_expected_current_version_of_npm_packages_to_latest_available():
     report('info', "Checking [newest published] npm package versions...")
     any_changes = False
@@ -769,27 +999,9 @@ def compare_expected_current_version_of_npm_packages_to_latest_available():
         report('info', "(Tell BJM or write an issue against this script on GitHub)")
 
     report('info', "...Done checking npm package versions.")
+    return True
 
-
-def is_android_sdk_installed():
-    if not android_sdk_root:
-        report('fatal', 'ANDROID_HOME and ANDROID_SDK_ROOT are not defined. Set at least one in your environment.')
-        report('info', "This may indicate you haven't downloaded the ANDROID SDK yet.")
-        report(
-            'info', 'Download the Android SDK from https://developer.android.com/studio')
-        return False
-
-    report('info', 'Environment var(s) point to an Android SDK location {asdk}.'.format(
-        asdk=android_sdk_root))
-
-    if exists_insensitive(android_sdk_root):
-        report('info', 'Android SDK appears to exist.')
-        return True
-
-    report('fatal', 'ANDROID_SDK_ROOT variable is set but directory does not exist. Set it CORRECTLY in your environment.')
-    return False
-
-
+@system_test({'prereqs':['is_android_sdk_installed']})
 def are_command_line_tools_in_path():
     if exists_insensitive(os.path.join(android_sdk_root, cmdline_tools_path)):
         report('info', 'Command-line tools are in path.')
@@ -797,20 +1009,17 @@ def are_command_line_tools_in_path():
     report('fatal', 'Command-line tools (latest) are not installed in Android SDK.')
     return False
 
-
+@system_test({'prereqs':['is_android_sdk_installed']})
 def is_correct_ndk_installed():
-    try:
-        if exists_insensitive(os.path.join(android_sdk_root, 'ndk', ndk_version)):
-            report('info', 'Correct NDK is installed.')
-            return True
-    except :
-        pass
+    if exists_insensitive(os.path.join(android_sdk_root, 'ndk', ndk_version)):
+        report('info', 'Correct NDK is installed.')
+        return True
     
     report('fatal', 'Android SDK NDK version {ndk_version} not installed.'.format(
         ndk_version=ndk_version))
     return False
 
-
+@system_test({'prereqs':['is_android_sdk_installed']})
 def are_all_build_tools_versions_present():
     missing = 0
     for btv in build_tools_versions:
@@ -830,6 +1039,7 @@ def are_all_build_tools_versions_present():
         count=missing))
     return False
 
+@system_test()
 def is_mac_java_version_set():
     if running_on_windows:
         report('info','(JAVA_VERSION is not needed for Windows)')
@@ -844,233 +1054,211 @@ def is_mac_java_version_set():
 
 # BEGIN MODIFICATIONS
 
-def add_kotlin_version_to_build_gradle(file_path):
-    try:
-        bg = read_gradle_file(file_path)
+@project_modification()
+def add_kotlin_version_to_build_gradle():
+    bg = read_gradle_file(build_gradle_path)
 
-        # Find buildscript.ext, ensure there is a kotlinVersion
-        # and that it has the correct version
+    # Find buildscript.ext, ensure there is a kotlinVersion
+    # and that it has the correct version
 
-        buildscript = list(filter(lambda x: 'key' in x and x['key'] == 'buildscript', bg))[0]
-        ext = list(filter(lambda x: 'key' in x and x['key'] == 'ext', buildscript['contents']))[0]
+    buildscript = list(filter(lambda x: 'key' in x and x['key'] == 'buildscript', bg))[0]
+    ext = list(filter(lambda x: 'key' in x and x['key'] == 'ext', buildscript['contents']))[0]
 
-        kvs = list(filter(lambda x: 'line' in x and x['line'].startswith('kotlinVersion'), ext['contents']))
-        if len(kvs) and 'line' in kvs[0] and kotlinVersion not in kvs[0]['line']:
-            report('warn', "build.gradle has unexpected "+kvs[0]['line'])
+    kvs = list(filter(lambda x: 'line' in x and x['line'].startswith('kotlinVersion'), ext['contents']))
+    if len(kvs) and 'line' in kvs[0] and kotlinVersion not in kvs[0]['line']:
+        report('warn', "build.gradle has unexpected "+kvs[0]['line'])
 
-        ext['contents'] = list(filter(lambda x: 'line' not in x or not x['line'].startswith('kotlinVersion'), ext['contents']))
-        ext['contents'].append({'line':'kotlinVersion = "{kv}"'.format(kv=kotlinVersion)})
+    ext['contents'] = list(filter(lambda x: 'line' not in x or not x['line'].startswith('kotlinVersion'), ext['contents']))
+    ext['contents'].append({'line':'kotlinVersion = "{kv}"'.format(kv=kotlinVersion)})
 
-        with open(file_path, 'w') as gradle_file:
-            gradle_file.write(gradle_config_as_str(bg))
+    with open(build_gradle_path, 'w') as gradle_file:
+        gradle_file.write(gradle_config_as_str(bg))
 
-        report('info', "build.gradle file updated successfully with kotlinVersion.")
-    except Exception as e:
-        report('error', f"{e}")
+    report('info', "build.gradle file updated successfully with kotlinVersion.")
 
+@project_modification()
+def add_signing_config_to_app_build_gradle():
+    with open(app_build_gradle_path, 'r') as app_build_gradle_file:
+        build_gradle_content = app_build_gradle_file.read()
 
-def add_signing_config_to_app_build_gradle(file_path):
-    try:
-        with open(file_path, 'r') as app_build_gradle_file:
-            build_gradle_content = app_build_gradle_file.read()
+        # Check if the signingConfigs section already exists
+        if 'signingConfigs {' in build_gradle_content:
+            # If it exists, append the signing_config_text to it
+            modified_content = re.sub(
+                r'(signingConfigs \{[^\}]*\})', r'\1' + signing_config_text, build_gradle_content, flags=re.DOTALL)
+        else:
+            # If it doesn't exist, add the entire signingConfig section
+            modified_content = re.sub(
+                r'(buildTypes \{[^\}]*\})', r'signingConfigs {\n' + signing_config_text + r'\1', build_gradle_content, flags=re.DOTALL)
 
-            # Check if the signingConfigs section already exists
-            if 'signingConfigs {' in build_gradle_content:
-                # If it exists, append the signing_config_text to it
-                modified_content = re.sub(
-                    r'(signingConfigs \{[^\}]*\})', r'\1' + signing_config_text, build_gradle_content, flags=re.DOTALL)
-            else:
-                # If it doesn't exist, add the entire signingConfig section
-                modified_content = re.sub(
-                    r'(buildTypes \{[^\}]*\})', r'signingConfigs {\n' + signing_config_text + r'\1', build_gradle_content, flags=re.DOTALL)
+    # Write the modified content back to the file
+    with open(app_build_gradle_path, 'w') as app_build_gradle_file:
+        app_build_gradle_file.write(modified_content)
 
-        # Write the modified content back to the file
-        with open(file_path, 'w') as app_build_gradle_file:
-            app_build_gradle_file.write(modified_content)
+    report('info', "app/build.gradle file updated successfully with signingConfigs.")
 
-        report('info', "app/build.gradle file updated successfully with signingConfigs.")
-    except Exception as e:
-        report('error', f"{e}")
+@project_modification()
+def add_keys_to_gradle_properties():
+    with open(gradle_properties_path, 'r') as properties_file:
+        properties_content = properties_file.read()
 
+        # Check if each property already exists in the file
+        for prop in gradle_properties_to_add:
+            if prop not in properties_content:
+                properties_content += f"{prop}\n"
 
-def add_keys_to_gradle_properties(properties_file_path):
-    try:
-        with open(properties_file_path, 'r') as properties_file:
-            properties_content = properties_file.read()
+    # Write the modified content back to the file
+    with open(gradle_properties_path, 'w') as properties_file:
+        properties_file.write(properties_content)
 
-            # Check if each property already exists in the file
-            for prop in gradle_properties_to_add:
-                if prop not in properties_content:
-                    properties_content += f"{prop}\n"
+    report('info', "gradle.properties file updated successfully.")
 
-        # Write the modified content back to the file
-        with open(properties_file_path, 'w') as properties_file:
-            properties_file.write(properties_content)
+@project_modification()
+def modify_gradle_properties():
+    with open(gradle_properties_path, 'r') as gradle_properties_file:
+        gradle_properties_content = gradle_properties_file.read()
 
-        report('info', "gradle.properties file updated successfully.")
-    except Exception as e:
-        report('error', f"{e}")
+        # Update the release section text
+        gradle_properties_content = re.sub(
+            r'(\s*release\s*\{[^\}]*\})',
+            release_section_text,
+            gradle_properties_content,
+            flags=re.DOTALL
+        )
 
+    # Write the modified content back to the file
+    with open(gradle_properties_path, 'w') as gradle_properties_file:
+        gradle_properties_file.write(gradle_properties_content)
 
-def modify_gradle_properties(gradle_properties_path):
-    try:
-        with open(gradle_properties_path, 'r') as gradle_properties_file:
-            gradle_properties_content = gradle_properties_file.read()
+    report('info', "gradle.properties file updated successfully.")
 
-            # Update the release section text
-            gradle_properties_content = re.sub(
-                r'(\s*release\s*\{[^\}]*\})',
-                release_section_text,
-                gradle_properties_content,
-                flags=re.DOTALL
-            )
+@project_modification()
+def modify_gradle_wrapper_distribution_url():
+    with open(gradle_wrapper_properties_path, 'r') as wrapper_properties_file:
+        wrapper_properties_content = wrapper_properties_file.readlines()
 
-        # Write the modified content back to the file
-        with open(gradle_properties_path, 'w') as gradle_properties_file:
-            gradle_properties_file.write(gradle_properties_content)
+    for i, line in enumerate(wrapper_properties_content):
+        if line.startswith("distributionUrl="):
+            wrapper_properties_content[i] = f"distributionUrl={new_distribution_url}\n"
+            break
 
-        report('info', "gradle.properties file updated successfully.")
-    except Exception as e:
-        report('error', f"{e}")
+    with open(gradle_wrapper_properties_path, 'w') as wrapper_properties_file:
+        wrapper_properties_file.writelines(wrapper_properties_content)
 
+    report('info', "Gradle wrapper distributionUrl updated successfully.")
 
-def modify_gradle_wrapper_distribution_url(prop_path, new_distribution_url):
-    try:
-        with open(prop_path, 'r') as wrapper_properties_file:
-            wrapper_properties_content = wrapper_properties_file.readlines()
+@project_modification()
+def add_gradle_java_home():
+    actual_java_home_path = osified_java_home_path
+    with open(gradle_properties_path, 'r') as gradle_properties_file:
+        gradle_properties_content = gradle_properties_file.readlines()
 
-        for i, line in enumerate(wrapper_properties_content):
-            if line.startswith("distributionUrl="):
-                wrapper_properties_content[i] = f"distributionUrl={new_distribution_url}\n"
-                break
+    java_home_line = f"org.gradle.java.home={actual_java_home_path}/\n"
+    java_home_exists = False
 
-        with open(prop_path, 'w') as wrapper_properties_file:
-            wrapper_properties_file.writelines(wrapper_properties_content)
+    for i, line in enumerate(gradle_properties_content):
+        if line.startswith("org.gradle.java.home="):
+            gradle_properties_content[i] = java_home_line
+            java_home_exists = True
+            break
 
-        report('info', "Gradle wrapper distributionUrl updated successfully.")
-    except Exception as e:
-        report('error', f"{e}")
+    if not java_home_exists:
+        gradle_properties_content.append(java_home_line)
 
+    with open(gradle_properties_path, 'w') as gradle_properties_file:
+        gradle_properties_file.writelines(gradle_properties_content)
 
-def add_gradle_java_home(gradle_properties_path, actual_java_home_path):
-    try:
-        with open(gradle_properties_path, 'r') as gradle_properties_file:
-            gradle_properties_content = gradle_properties_file.readlines()
+    report('info', "org.gradle.java.home added or updated in gradle.properties.")
 
-        java_home_line = f"org.gradle.java.home={actual_java_home_path}/\n"
-        java_home_exists = False
+@project_modification()
+def add_universal_json_file():
+    if exists_insensitive(universal_json_path):
+        report(
+            'info', f"{universal_json_path} file already exists. (not modifying it)")
+        return
 
-        for i, line in enumerate(gradle_properties_content):
-            if line.startswith("org.gradle.java.home="):
-                gradle_properties_content[i] = java_home_line
-                java_home_exists = True
-                break
+    with open(universal_json_path, 'w') as universal_json_file:
+        json.dump(universal_json_contents, universal_json_file, indent=4)
 
-        if not java_home_exists:
-            gradle_properties_content.append(java_home_line)
+    report('info', f"{universal_json_path} file created with contents.")
 
-        with open(gradle_properties_path, 'w') as gradle_properties_file:
-            gradle_properties_file.writelines(gradle_properties_content)
-
-        report('info', "org.gradle.java.home added or updated in gradle.properties.")
-    except Exception as e:
-        report('error', f"{e}")
-
-
-def add_universal_json_file(universal_json_path, contents):
-    try:
-        if exists_insensitive(universal_json_path):
-            report(
-                'info', f"{universal_json_path} file already exists. (not modifying it)")
-            return
-
-        with open(universal_json_path, 'w') as universal_json_file:
-            json.dump(contents, universal_json_file, indent=4)
-
-        report('info', f"{universal_json_path} file created with contents.")
-    except Exception as e:
-        report('error', f"{e}")
-
-
+@project_modification()
 def remove_tsx_and_create_app_js():
-    try:
-        if exists_insensitive(app_tsx_path):
-            if os.path.getsize(app_tsx_path) != app_tsx_original_length:
-                report(
-                    'warn', f"{app_tsx_path} has been modified. Is this intentional?")
-                report('info', f"{app_tsx_path} not overwritten.")
-                return
-
-            os.remove(app_tsx_path)
+    if exists_insensitive(app_tsx_path):
+        if os.path.getsize(app_tsx_path) != app_tsx_original_length:
             report(
-                'info', f"{app_tsx_path} removed (it was the default version).")
-
-        if exists_insensitive(app_js_path):
-            report('info', f"{app_js_path} exists and has not been modified.")
+                'warn', f"{app_tsx_path} has been modified. Is this intentional?")
+            report('info', f"{app_tsx_path} not overwritten.")
             return
 
-        # Create a new App.js file with the specified contents
-        with open(app_js_path, 'w') as app_js_file:
-            app_js_file.write(app_js_content)
+        os.remove(app_tsx_path)
+        report(
+            'info', f"{app_tsx_path} removed (it was the default version).")
 
-        report('info', f"{app_js_path} created.")
-    except Exception as e:
-        report('error', f"{e}")
+    if exists_insensitive(app_js_path):
+        report('info', f"{app_js_path} exists and has not been modified.")
+        return
 
+    # Create a new App.js file with the specified contents
+    with open(app_js_path, 'w') as app_js_file:
+        app_js_file.write(app_js_content)
 
-def modify_package_json_dependencies(json_path):
-    try:
-        with open(json_path, 'r') as package_json_file:
-            package_json_data = json.load(package_json_file)
-            dependencies_to_update = package_json_data.get("dependencies", {})
+    report('info', f"{app_js_path} created.")
 
-            count_of_dependencies_changed = 0
+@project_modification()
+def modify_package_json_dependencies():
+    json_path = package_json_path
 
-            # Add the specified keys in the desired order
-            for key in dependencies_to_add:
-                if key not in dependencies_to_update:
-                    report('info', f"Adding {key} {dependencies_to_add[key]}")
-                    dependencies_to_update[key] = dependencies_to_add[key]
-                    count_of_dependencies_changed += 1
-                    continue
+    with open(json_path, 'r') as package_json_file:
+        package_json_data = json.load(package_json_file)
+        dependencies_to_update = package_json_data.get("dependencies", {})
 
-                if dependencies_to_add[key] != dependencies_to_update[key]:
-                    report(
-                        'warn', f"Updating {key} from {dependencies_to_update[key]} to {dependencies_to_add[key]}")
-                    dependencies_to_update[key] = dependencies_to_add[key]
-                    count_of_dependencies_changed += 1
-                    continue
+        count_of_dependencies_changed = 0
 
-                report('info', "{key} ({cd}) is present and up to date".format(
-                    key=key, cd=dependencies_to_update[key]))
+        # Add the specified keys in the desired order
+        for key in dependencies_to_add:
+            if key not in dependencies_to_update:
+                report('info', f"Adding {key} {dependencies_to_add[key]}")
+                dependencies_to_update[key] = dependencies_to_add[key]
+                count_of_dependencies_changed += 1
+                continue
 
-            # Merge the new dependencies with existing ones
-            package_json_data["dependencies"] = dependencies_to_update
+            if dependencies_to_add[key] != dependencies_to_update[key]:
+                report(
+                    'warn', f"Updating {key} from {dependencies_to_update[key]} to {dependencies_to_add[key]}")
+                dependencies_to_update[key] = dependencies_to_add[key]
+                count_of_dependencies_changed += 1
+                continue
 
-        if count_of_dependencies_changed == 0:
-            report('info', "No package.json dependencies changed.")
-            return
+            report('info', "{key} ({cd}) is present and up to date".format(
+                key=key, cd=dependencies_to_update[key]))
 
-        package_json_file_bak = json_path + '.bak'
-        report('info', "Backing up {jp} to {jpb}".format(
-            jp=json_path, jpb=package_json_file_bak))
+        # Merge the new dependencies with existing ones
+        package_json_data["dependencies"] = dependencies_to_update
 
-        if os.path.exists(package_json_file_bak):
-            report('warn', "Removing existing {jpb} file".format(
-                jpb=package_json_file_bak))
-            os.remove(package_json_file_bak)
+    if count_of_dependencies_changed == 0:
+        report('info', "No package.json dependencies changed.")
+        return
 
-        os.rename(json_path, package_json_file_bak)
+    package_json_file_bak = json_path + '.bak'
+    report('info', "Backing up {jp} to {jpb}".format(
+        jp=json_path, jpb=package_json_file_bak))
 
-        # Write the modified content back to the file
-        with open(json_path, 'w') as package_json_file:
-            json.dump(package_json_data, package_json_file,
-                      indent=2, sort_keys=True)
+    if os.path.exists(package_json_file_bak):
+        report('warn', "Removing existing {jpb} file".format(
+            jpb=package_json_file_bak))
+        os.remove(package_json_file_bak)
 
-        report('info', "package.json file adjusted successfully.")
-    except Exception as e:
-        report('error', f"{e}")
+    os.rename(json_path, package_json_file_bak)
 
+    # Write the modified content back to the file
+    with open(json_path, 'w') as package_json_file:
+        json.dump(package_json_data, package_json_file,
+                indent=2, sort_keys=True)
+
+    report('info', "package.json file adjusted successfully.")
+
+@project_modification()
 def create_assets_config():
     if os.path.exists(font_assets_dir):
         report('info',f'{font_assets_dir} dir exists already')
@@ -1082,29 +1270,23 @@ def create_assets_config():
         report('info',f'{react_native_config_path} exists already; not overwritten')
         return True
     
-    try:
-        with open(react_native_config_path, 'w') as config_file:
-            config_file.write(react_native_config_contents)
+    with open(react_native_config_path, 'w') as config_file:
+        config_file.write(react_native_config_contents)
 
-        report('info', f"{react_native_config_path} created.")
-        return True
-    except Exception as e:
-        report('error', f"{e}") 
-        return False
+    report('info', f"{react_native_config_path} created.")
+    return True
 
+@project_modification()
 def create_keystore():
     if exists_insensitive(keystore_path):
         report('info', "Keystore already exists. (not overwriting it)")
         return
 
-    try:
-        as_args = re.split(r'  +', keystore_create_cmd)
-        subprocess.check_output(as_args, stderr=subprocess.STDOUT, text=True)
-        report('info', "Keystore generated successfully.")
-    except subprocess.CalledProcessError:
-        report('error', "Keystore generated failed.")
+    as_args = re.split(r'  +', keystore_create_cmd)
+    subprocess.check_output(as_args, stderr=subprocess.STDOUT, text=True)
+    report('info', "Keystore generated successfully.")
 
-
+@project_modification()
 def create_prettierrc():
     if exists_insensitive(".prettierrc"):
         report('info', 'Found existing .prettierrc, so not modifying it.')
@@ -1115,104 +1297,54 @@ def create_prettierrc():
 
     report('info', ".prettierrc file created.")
 
-# OVERALL ORCHESTRATION of TESTS that ALL MUST PASS (in order) before proceeding
-# True for success, False for failure
-
-
-def tests_of_essentials():
-    tests = [is_npm_installed, is_java_home_valid,
-             is_java_in_path, is_correct_version_of_java_installed,
-             is_java_from_path_from_java_home, are_paths_valid,
-             is_android_sdk_installed,is_homebrew_installed]
-
-    all_successful = True
-    for test in tests:
-        if test():
+def execute_operations():
+    global ok_to_proceed_with_modifications
+    overall_success = True
+    for operation in operations_in_order:
+        fn = operation['func_name']
+        if not operation['to_run']:
             continue
-        if not config['force']:
-            return False
-        all_successful = False
-    return all_successful
+        if operation['type'] == 'modification' and not ok_to_proceed_with_modifications:
+            report('info',"Skipping {fn} ('{typ}' filtered out; previous test failure)".format(
+                fn=fn,
+                typ=operation['type'])
+            )
+            continue
+        try:
+            result = operation['func']()
+            operation['result'] = result
+        except Exception as e:
+            report('error','module {fn} raised {e}'.format(
+                fn=fn,
+                e=e
+            ))
+            report('error','please report to BJM ASAP')
+            operation['result'] = False
+            overall_success = False
 
+            if not config['force']:
+                break
 
-# OVERALL ORCHESTRATION of TESTS that are INDEPENDENT of each other:
-# failure of one does not prevent others from running
-# True for success, False for failure
-def tests_independent_of_each_other():
-    tests = [is_project_under_git, is_npm_project,
-             is_react_native_project, is_react_native_cli_project, 
-             is_not_formerly_expo_project, is_adb_present,
-             is_watchman_present, is_ios_deploy_present, is_cocoapods_present, is_xcode_selected,
-             is_keytool_present, check_for_emulator,
-             is_bundletool_installed, is_correct_ndk_installed,
-             are_command_line_tools_in_path, is_mac_java_version_set,
-             are_all_build_tools_versions_present]
-    all_successful = True
-    for test in tests:
-        if not test():
-            all_successful = False
-    return all_successful
+        if not operation['result'] and not config['force']:
+            ok_to_proceed_with_modifications = False
 
-
-# OVERALL ORCHESTRATION of MODIFICATIONS
-def modify_project_files():
-    compare_expected_current_version_of_npm_packages_to_latest_available()
-
-    modify_package_json_dependencies(package_json_path)
-
-    remove_tsx_and_create_app_js()
-
-    create_prettierrc()
-
-    create_assets_config()
-
-    add_gradle_java_home(gradle_properties_path, osified_java_home_path)
-
-    add_keys_to_gradle_properties(gradle_properties_path)
-
-    add_universal_json_file(universal_json_path, universal_json_contents)
-
-    modify_gradle_wrapper_distribution_url(
-        gradle_wrapper_properties_path, new_distribution_url)
-
-    add_kotlin_version_to_build_gradle(build_gradle_path)
-
-    add_signing_config_to_app_build_gradle(app_build_gradle_path)
-
-    modify_gradle_properties(gradle_properties_path)
-
-    create_keystore()
-
+    return overall_success or config['force']
 
 if __name__ == "__main__":
 
-    config = set_up_config()
+    # note that this is done after operations_in_order is created
+    config = parse_command_line_arguments()
 
     sys.stdout = Logger()
 
+    new_ops = list(map(lambda x: {**x,'func':'<>'}, operations_in_order))
+
     report('info', welcome_message, include_line=False)
 
-    if not tests_of_essentials():
-        if not config['force']:
-            report('info', 'Exiting...')
-            print_counts()
-            sys.exit(1)
+    success = execute_operations()
 
-    if not tests_independent_of_each_other():
-        if not config['force']:
-            report('info', 'Exiting...')
-            print_counts()
-            sys.exit(1)
-
-    try:
-        modify_project_files()
-    except Exception as e:
-        report('error', f"{e}")
-        report('fatal', 'Exiting...')
-        print_counts()
-        sys.exit(1)
-
-    report('info', 'Be sure to:\n{pcs}\n'.format(
-        pcs=post_config_steps), include_line=False)
+    if success:
+        report('info', 'Be sure to:\n{pcs}\n'.format(
+            pcs=post_config_steps), include_line=False)
 
     print_counts()

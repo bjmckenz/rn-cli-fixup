@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.2"
+script_version = "1.2.1"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -1313,6 +1313,7 @@ def execute_operations():
         try:
             result = operation['func']()
             operation['result'] = result
+            report('debug',"op {fn} returned {r}".format(fn=fn,r=result))
         except Exception as e:
             report('error','module {fn} raised {e}'.format(
                 fn=fn,

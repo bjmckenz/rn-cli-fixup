@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.2.1"
+script_version = "1.2.2"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -1075,6 +1075,7 @@ def add_kotlin_version_to_build_gradle():
         gradle_file.write(gradle_config_as_str(bg))
 
     report('info', "build.gradle file updated successfully with kotlinVersion.")
+    return True
 
 @project_modification()
 def add_signing_config_to_app_build_gradle():
@@ -1096,6 +1097,7 @@ def add_signing_config_to_app_build_gradle():
         app_build_gradle_file.write(modified_content)
 
     report('info', "app/build.gradle file updated successfully with signingConfigs.")
+    return True
 
 @project_modification()
 def add_keys_to_gradle_properties():
@@ -1112,6 +1114,7 @@ def add_keys_to_gradle_properties():
         properties_file.write(properties_content)
 
     report('info', "gradle.properties file updated successfully.")
+    return True
 
 @project_modification()
 def modify_gradle_properties():
@@ -1131,6 +1134,7 @@ def modify_gradle_properties():
         gradle_properties_file.write(gradle_properties_content)
 
     report('info', "gradle.properties file updated successfully.")
+    return True
 
 @project_modification()
 def modify_gradle_wrapper_distribution_url():
@@ -1146,6 +1150,7 @@ def modify_gradle_wrapper_distribution_url():
         wrapper_properties_file.writelines(wrapper_properties_content)
 
     report('info', "Gradle wrapper distributionUrl updated successfully.")
+    return True
 
 @project_modification()
 def add_gradle_java_home():
@@ -1169,18 +1174,20 @@ def add_gradle_java_home():
         gradle_properties_file.writelines(gradle_properties_content)
 
     report('info', "org.gradle.java.home added or updated in gradle.properties.")
+    return True
 
 @project_modification()
 def add_universal_json_file():
     if exists_insensitive(universal_json_path):
         report(
             'info', f"{universal_json_path} file already exists. (not modifying it)")
-        return
+        return True
 
     with open(universal_json_path, 'w') as universal_json_file:
         json.dump(universal_json_contents, universal_json_file, indent=4)
 
     report('info', f"{universal_json_path} file created with contents.")
+    return True
 
 @project_modification()
 def remove_tsx_and_create_app_js():
@@ -1189,7 +1196,7 @@ def remove_tsx_and_create_app_js():
             report(
                 'warn', f"{app_tsx_path} has been modified. Is this intentional?")
             report('info', f"{app_tsx_path} not overwritten.")
-            return
+            return True
 
         os.remove(app_tsx_path)
         report(
@@ -1197,13 +1204,14 @@ def remove_tsx_and_create_app_js():
 
     if exists_insensitive(app_js_path):
         report('info', f"{app_js_path} exists and has not been modified.")
-        return
+        return True
 
     # Create a new App.js file with the specified contents
     with open(app_js_path, 'w') as app_js_file:
         app_js_file.write(app_js_content)
 
     report('info', f"{app_js_path} created.")
+    return True
 
 @project_modification()
 def modify_package_json_dependencies():
@@ -1238,7 +1246,7 @@ def modify_package_json_dependencies():
 
     if count_of_dependencies_changed == 0:
         report('info', "No package.json dependencies changed.")
-        return
+        return True
 
     package_json_file_bak = json_path + '.bak'
     report('info', "Backing up {jp} to {jpb}".format(
@@ -1257,6 +1265,7 @@ def modify_package_json_dependencies():
                 indent=2, sort_keys=True)
 
     report('info', "package.json file adjusted successfully.")
+    return True
 
 @project_modification()
 def create_assets_config():
@@ -1280,22 +1289,24 @@ def create_assets_config():
 def create_keystore():
     if exists_insensitive(keystore_path):
         report('info', "Keystore already exists. (not overwriting it)")
-        return
+        return True
 
     as_args = re.split(r'  +', keystore_create_cmd)
     subprocess.check_output(as_args, stderr=subprocess.STDOUT, text=True)
     report('info', "Keystore generated successfully.")
+    return True
 
 @project_modification()
 def create_prettierrc():
     if exists_insensitive(".prettierrc"):
         report('info', 'Found existing .prettierrc, so not modifying it.')
-        return
+        return True
 
     with open('.prettierrc', 'w') as rc_file:
         rc_file.write(prettier_rc)
 
     report('info', ".prettierrc file created.")
+    return True
 
 def execute_operations():
     global ok_to_proceed_with_modifications

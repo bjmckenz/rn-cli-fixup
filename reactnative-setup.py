@@ -12,17 +12,15 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.2.2"
+script_version = "1.2.3"
 
 # This script is intended to be run from the root of a React Native project directory.
 
 ### TO DO
 # TODO: Handle Linux
-# TODO: https://blog.logrocket.com/react-native-vector-icons-fonts-react-native-app-ui/
-# TODO: https://stackoverflow.com/questions/69079963/how-to-set-compilejava-task-11-and-compilekotlin-task-1-8-jvm-target-com
 # TODO: Better version of how to fix. Perhaps for each test?
-# TODO: Clean up filenames, envvars, file contents   
-# TODO: move data to a file 
+# TODO: Clean up filenames, envvars, file contents
+# TODO: move data to a file
 # TODO: give revised version of .bashrc/.zshrc
 # TODO: test gitbash on win for shelltype, file PS vs command PS
 # FIXME: only create .prettierrc if the JS version ALSO doesn't exist
@@ -169,7 +167,7 @@ BUT DO NOT try to run-android without BOTH "doctor" and this script reporting su
 Note that "WARN:" does not mean "Error", it means "be sure this is correct."
 
 All output from this script will be logged to {of}
-*********** 
+***********
 
 """.format(of=script_output_file)
 
@@ -265,7 +263,7 @@ $ npm install
 $ npx react-native-asset
 
 [Then...]
-*sigh* 
+*sigh*
 [to run on simulator or connected device]
 
 $ npx react-native run-android
@@ -300,7 +298,7 @@ android_home = os.environ.get('ANDROID_HOME')
 android_sdk_root = android_home if android_home else os.environ.get(
     'ANDROID_SDK_ROOT')
 
-    
+
 font_assets_dir = 'assets/fonts'
 react_native_config_path = 'react-native.config.js'
 react_native_config_contents = '''
@@ -436,7 +434,7 @@ def system_test(attrs={}):
 
 def project_test(attrs={}):
     return operation({'scope':'project','type':'test', **attrs})
-    
+
 def project_modification(attrs={}):
     return operation({'scope':'project','type':'modification', **attrs})
 
@@ -503,40 +501,40 @@ def parse_command_line_arguments():
                                     formatter_class=argparse.
                                     ArgumentDefaultsHelpFormatter,
                                     epilog="v{ver} Contact bjmckenz@gmail.com with bugs, questions, and suggestions.".format(ver=script_version))
-    
+
     parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction,
                         default=False, help="Shhh! No INFO messages")
-    
+
     parser.add_argument("--debug", action=argparse.BooleanOptionalAction,
                         default=False, help="Show Debug Messages")
-    
+
     parser.add_argument("-f", "--force", action=argparse.BooleanOptionalAction,
                         default=False,
                         help="continue even if after an error")
-    
+
     parser.add_argument("--ignore-prerequisites", action='store_true',
                         default=False,
                         help="run tests regardless of prerequisites")
-    
+
     parser.add_argument("--no-tests", action=NoTests, nargs=0,
                         help="skip all tests")
-    
+
     parser.add_argument("--no-project", action=NoProject, nargs=0,
                         help="skip project-level tests")
-    
+
     parser.add_argument("--no-system", action=NoSystem, nargs=0,
                         help="skip system-level tests")
-    
+
     parser.add_argument("--no-mods","--no-modifications", action=NoMods, nargs=0,
                         help="skip modifications")
-    
+
     for op in operations_in_order:
-        parser.add_argument("--do-"+op['func_name'], 
-                            action=DoTestModule if op['type'] == 'test' else DoModificationtModule, 
+        parser.add_argument("--do-"+op['func_name'],
+                            action=DoTestModule if op['type'] == 'test' else DoModificationtModule,
                             dest=op['func_name'], nargs=0,
                             help="run "+op['func_name'])
-        
-        parser.add_argument("--skip-"+op['func_name'], 
+
+        parser.add_argument("--skip-"+op['func_name'],
                             action=SkipModule, nargs=0,
                             dest=op['func_name'],
                             help="(don't) "+op['func_name'])
@@ -544,7 +542,7 @@ def parse_command_line_arguments():
     # parser.add_argument("--skip-version-check", action='store_true',
     #                     default=False,
     #                     help="skip check for this script's version")
-    
+
     config = vars(parser.parse_args())
     # if operation_named["show_newest_script_version"]['to_run']:
     #     operation_named['script_version_check']['to_run'] = False
@@ -628,10 +626,10 @@ def print_stats():
     report('debug',"*** OPERATIONS ***")
     report('debug',json.dumps(list(map(lambda x: {**x, 'func':'<func>'},operations_in_order)), indent=4))
     return True
-    
+
 
 @operation({'scope':'meta','type':'meta'})
-def script_version_check():    
+def script_version_check():
     current_vers = current_version_of_script()
     if current_vers is None:
         report('fatal','Could not determine current version of script.')
@@ -655,10 +653,10 @@ def show_newest_script_version():
     if current_vers is None:
         report('error','Could not determine current version of script.')
         sys.exit()
-    
+
     report('info','Your version of this script is {this}. Current version on github is {vers}'.format(
             vers=current_vers, this=script_version))
-    
+
     sys.exit()
 
 @system_test()
@@ -809,7 +807,7 @@ def is_homebrew_installed():
     if shutil.which('brew') != None:
         report('info','brew exists.');
         return True
-    
+
     report('fatal','Brew is necessary for Mac development but is not installed.')
     report('info','Install it as shown at https://brew.sh/')
     return False
@@ -870,14 +868,14 @@ def is_cocoapods_present():
     if running_on_windows:
         report('info','(Cocoapods is not required on Windows.)')
         return True
-    
+
     if brew_recipe_installed('cocoapods'):
         report('info', 'Found cocoapods.')
         return True
-    
+
     report('fatal', 'cocoapods not found.')
     report('info','Install it via: brew install cocoapods')
-    
+
     return False
 
 @system_test()
@@ -885,7 +883,7 @@ def is_xcode_selected():
     if running_on_windows:
         report('info','(xcode-select is not required on Windows.)')
         return True
-    
+
     xcode_sel_output = subprocess.check_output(
             ["xcode-select", "--print-path"], stderr=subprocess.STDOUT, text=True)
 
@@ -895,7 +893,7 @@ def is_xcode_selected():
 
     report('fatal', 'It does not appear that Xcode is selected.')
     report('info','Select it via: sudo xcode-select -s /Applications/Xcode.app')
-    
+
     return False
 
 @system_test()
@@ -903,14 +901,14 @@ def is_watchman_present():
     if running_on_windows:
         report('info','(Watchman is not required on Windows.)')
         return True
-    
+
     if shutil.which('watchman'):
         report('info', 'Found watchman.')
         return True
-    
+
     report('fatal', 'watchman command not found. Set it in your path).')
     report('info','It is easiest to do: brew install watchman (and make sure /opt/homebrew/bin is in your PATH)')
-    
+
     return False
 
 @system_test()
@@ -918,14 +916,14 @@ def is_ios_deploy_present():
     if running_on_windows:
         report('info','(ios-deploy is not required on Windows.)')
         return True
-    
+
     if shutil.which('ios-deploy'):
         report('info', 'Found ios-deploy.')
         return True
-    
+
     report('fatal', 'ios-deploy command not found. Set it in your path).')
     report('info','It is easiest to do: brew install ios-deploy (and make sure /opt/homebrew/bin is in your PATH)')
-    
+
     return False
 
 @system_test()
@@ -933,7 +931,7 @@ def is_adb_present():
     if shutil.which(adb_command):
         report('info', 'Found adb.')
         return True
-    
+
     report('fatal', 'adb command not found. Set it in your path (install platform-tools if needed).')
     if not running_on_windows:
         report('info','On Mac, it is easiest to do: brew install android-platform-tools (and make sure /opt/homebrew/bin is in your PATH)')
@@ -968,7 +966,7 @@ def is_bundletool_installed():
         return False
 
     report('info','bundletool destination folder of {bt_dir} exists.'.format(bt_dir=bt_dir))
-    
+
     if exists_insensitive(bt_dir+bt_jar):
         report('info', 'Found current version of bundletool.')
         return True
@@ -1014,7 +1012,7 @@ def is_correct_ndk_installed():
     if exists_insensitive(os.path.join(android_sdk_root, 'ndk', ndk_version)):
         report('info', 'Correct NDK is installed.')
         return True
-    
+
     report('fatal', 'Android SDK NDK version {ndk_version} not installed.'.format(
         ndk_version=ndk_version))
     return False
@@ -1044,7 +1042,7 @@ def is_mac_java_version_set():
     if running_on_windows:
         report('info','(JAVA_VERSION is not needed for Windows)')
         return True
-    
+
     if os.environ.get('JAVA_VERSION') == expected_java_version:
         report('info','JAVA_VERSION is set correctly.')
         return True
@@ -1074,7 +1072,7 @@ def add_kotlin_version_to_build_gradle():
     with open(build_gradle_path, 'w') as gradle_file:
         gradle_file.write(gradle_config_as_str(bg))
 
-    report('info', "build.gradle file updated successfully with kotlinVersion.")
+    report('info', "build.gradle file updated successfully with kotlinVersion {kv}.".format(kv=kotlinVersion))
     return True
 
 @project_modification()
@@ -1113,7 +1111,7 @@ def add_keys_to_gradle_properties():
     with open(gradle_properties_path, 'w') as properties_file:
         properties_file.write(properties_content)
 
-    report('info', "gradle.properties file updated successfully.")
+    report('info', "gradle.properties file updated successfully with keys.")
     return True
 
 @project_modification()
@@ -1133,7 +1131,7 @@ def modify_gradle_properties():
     with open(gradle_properties_path, 'w') as gradle_properties_file:
         gradle_properties_file.write(gradle_properties_content)
 
-    report('info', "gradle.properties file updated successfully.")
+    report('info', "gradle.properties file updated successfully with release section.")
     return True
 
 @project_modification()
@@ -1278,7 +1276,7 @@ def create_assets_config():
     if os.path.exists(react_native_config_path):
         report('info',f'{react_native_config_path} exists already; not overwritten')
         return True
-    
+
     with open(react_native_config_path, 'w') as config_file:
         config_file.write(react_native_config_contents)
 

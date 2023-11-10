@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.2.3"
+script_version = "1.3.1"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -23,7 +23,14 @@ script_version = "1.2.3"
 # TODO: move data to a file
 # TODO: give revised version of .bashrc/.zshrc
 # TODO: test gitbash on win for shelltype, file PS vs command PS
-# FIXME: only create .prettierrc if the JS version ALSO doesn't exist
+#   PowerShell: ShellId = Microsoft.PowerShell
+#   CMD, cygwin,gitbash: OS Windows_NT
+#   cygwin,gitbsh: SHELL
+#   gitbash and cygwin can handle \ in paths
+# FIXME: https://stackoverflow.com/questions/70258316/how-to-fix-dexoptionsactiondexoptions-unit-is-deprecated-setting-dexopt
+# FIXME: https://stackoverflow.com/questions/71365373/software-components-will-not-be-created-automatically-for-maven-publishing-from#:~:text=WARNING%3A%20Software%20Components%20will%20not,use%20the%20new%20publishing%20DSL.
+# FIXME: When running a single thing, turn off modifications
+# TODO: fix/strip case_sensitivity
 
 # ENVIRONMENTY STUFF
 
@@ -64,7 +71,7 @@ distinguished_name = "CN=MyName, OU=MyOrgUnit, O=MyOrg, L=MyCity, ST=MyStateOrPr
 ### vvv NOT INTENDED TO BE CUSTOMIZED (but fix it if needed) vvv ###
 
 
-bt_jar = 'bundletool-all-1.15.5.jar'
+bt_jar = 'bundletool-all-1.15.6.jar'
 bt_loc = 'https://github.com/google/bundletool'
 
 new_distribution_url = 'https://services.gradle.org/distributions/gradle-8.1-bin.zip'.format(
@@ -300,10 +307,11 @@ android_sdk_root = android_home if android_home else os.environ.get(
 
 
 font_assets_dir = 'assets/fonts'
+sound_assets_dir = 'assets/audio'
 react_native_config_path = 'react-native.config.js'
 react_native_config_contents = '''
 module.exports = {
-    assets: ['./assets/fonts'],
+    assets: ['./assets/fonts'. './assets/audio'],
     dependencies: {
         'react-native-vector-icons': {
             platforms: {
@@ -380,15 +388,6 @@ def current_version_of_script():
 
 def versiontuple(v):
     return tuple(map(int, (v.split("."))))
-
-#  https://stackoverflow.com/questions/319426/how-do-i-do-a-case-insensitive-string-comparison
-def getfile_insensitive(path):
-    directory, filename = os.path.split(path)
-    directory, filename = (directory or '.'), filename.lower()
-    for f in os.listdir(directory):
-        newpath = os.path.join(directory, f)
-        if os.path.exists(newpath) and f.lower() == filename:
-            return newpath
 
 #### Decorators and such that automatically collect operations to run
 
@@ -550,13 +549,11 @@ def parse_command_line_arguments():
     return config
 
 def exists_insensitive(path):
-    return getfile_insensitive(path) is not None
+    return os.path.exists(os.path.normcase(path))
 
 
 def paths_equal(path1, path2):
-    if running_on_windows:
-        return path1.lower() == path2.lower()
-    return path1 == path2
+    os.path.normcase(path1) == os.path.normcase(path2)
 
 def current_version_of_npm_package(pkg):
     url = 'https://unpkg.com/{pkg}/package.json'.format(pkg=pkg)
@@ -680,7 +677,7 @@ def is_java_home_valid():
     report('info', 'JAVA_HOME is set to {jhp}'.format(
         jhp=java_home))
 
-    if os.path.exists(java_home):
+    if os.path.exists(os.path.normcase(java_home)):
         report('info', 'JAVA_HOME points to an existing directory.')
         return True
 
@@ -755,7 +752,7 @@ def is_android_sdk_installed():
     report('info', 'Environment var(s) point to an Android SDK location {asdk}.'.format(
         asdk=android_sdk_root))
 
-    if exists_insensitive(android_sdk_root):
+    if os.path.exists(os.path.normcase(android_sdk_root)):
         report('info', 'Android SDK appears to exist.')
         return True
 
@@ -817,7 +814,12 @@ def is_homebrew_installed():
 
 @project_test()
 def is_project_under_git():
-    if os.path.exists('.git'):
+    # if os.path.exists(os.path.normcase('.git')):
+    #     report('info', 'Project is git-controlled.')
+    #     return True
+
+    if subprocess.run(
+            ["git", "rev-parse"], stderr=subprocess.DEVNULL).returncode == 0:
         report('info', 'Project is git-controlled.')
         return True
 
@@ -1273,8 +1275,18 @@ def create_assets_config():
         os.makedirs(font_assets_dir)
         report('info',f'{font_assets_dir} dir created')
 
+    created_sound_dir = False
+    if os.path.exists(sound_assets_dir):
+        report('info',f'{sound_assets_dir} dir exists already')
+    else:
+        created_sound_dir = True
+        os.makedirs(sound_assets_dir)
+        report('info',f'{sound_assets_dir} dir created')
+
     if os.path.exists(react_native_config_path):
         report('info',f'{react_native_config_path} exists already; not overwritten')
+        if created_sound_dir:
+            report('warn',f'You may need to add {sound_assets_dir} to {react_native_config_path}')
         return True
 
     with open(react_native_config_path, 'w') as config_file:
@@ -1296,9 +1308,10 @@ def create_keystore():
 
 @project_modification()
 def create_prettierrc():
-    if exists_insensitive(".prettierrc"):
-        report('info', 'Found existing .prettierrc, so not modifying it.')
-        return True
+    if exists_insensitive(".prettierrc") or \
+        exists_insensitive(".prettierrc.js"):
+            report('info', 'Found existing .prettierrc or .prettierrc.js, so not modifying it.')
+            return True
 
     with open('.prettierrc', 'w') as rc_file:
         rc_file.write(prettier_rc)

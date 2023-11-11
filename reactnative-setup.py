@@ -12,12 +12,11 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.3.1"
+script_version = "1.3.2"
 
 # This script is intended to be run from the root of a React Native project directory.
 
 ### TO DO
-# TODO: Handle Linux
 # TODO: Better version of how to fix. Perhaps for each test?
 # TODO: Clean up filenames, envvars, file contents
 # TODO: move data to a file
@@ -30,7 +29,7 @@ script_version = "1.3.1"
 # FIXME: https://stackoverflow.com/questions/70258316/how-to-fix-dexoptionsactiondexoptions-unit-is-deprecated-setting-dexopt
 # FIXME: https://stackoverflow.com/questions/71365373/software-components-will-not-be-created-automatically-for-maven-publishing-from#:~:text=WARNING%3A%20Software%20Components%20will%20not,use%20the%20new%20publishing%20DSL.
 # FIXME: When running a single thing, turn off modifications
-# TODO: fix/strip case_sensitivity
+# FIXME: release section should use proper file reading, not regex
 
 # ENVIRONMENTY STUFF
 
@@ -269,11 +268,13 @@ post_config_steps = '''
 $ npm install
 $ npx react-native-asset
 
-[Then...]
-*sigh*
-[to run on simulator or connected device]
+*FOR IOS Before* your first build (or after you install a new NPM package) you must:
 
-$ npx react-native run-android
+$ sudo gem update cocoapods --pre
+$ npx pod-install
+$ cd ios && pod update && cd ..
+
+$ npx react-native run-android *(or)* run-ios
 
 [to build an APK]
 
@@ -283,14 +284,6 @@ $ cd android && .{ps}gradlew build && .{ps}gradlew bundleRelease
 $ {build_apks_cmd}
 
 $ {extract_apk_cmd}
-
-[to build on Mac for IOS]
-
-*Before* your first build (or after you install a new NPM package) you must:
-
-$ sudo gem update cocoapods --pre
-$ npx pod-install
-$ cd ios && pod update && cd ..
 
 '''.format(
     extract_apk_cmd=extract_apk_cmd,
@@ -451,7 +444,7 @@ def do_once(func):
 def parse_command_line_arguments():
 
     @do_once
-    def clear_list_of_test_to_run():
+    def clear_list_of_tests_to_run():
         for op in operations_in_order:
             if op['type'] == 'test':
                 op['to_run'] = False
@@ -464,7 +457,8 @@ def parse_command_line_arguments():
 
     class DoTestModule(argparse.Action):
         def __call__(self, parse, namespace, values, option_string=None):
-            clear_list_of_test_to_run()
+            ok_to_proceed_with_modifications = False
+            clear_list_of_tests_to_run()
             operation_named[self.dest]['to_run'] = True
 
     class DoModificationtModule(argparse.Action):
@@ -478,7 +472,7 @@ def parse_command_line_arguments():
 
     class NoTests(argparse.Action):
         def __call__(self, parse, namespace, values, option_string=None):
-            clear_list_of_test_to_run()
+            clear_list_of_tests_to_run()
 
     class NoMods(argparse.Action):
         def __call__(self, parse, namespace, values, option_string=None):
@@ -511,6 +505,15 @@ def parse_command_line_arguments():
                         default=False,
                         help="continue even if after an error")
 
+    parser.add_argument("--simulate-modifications", action=argparse.BooleanOptionalAction,
+                        default=False, dest='simulate',
+                        help="simulate modifications, don't actually do them")
+
+    parser.add_argument("--show-header-and-trailer", action=argparse.BooleanOptionalAction,
+                        default=not safe_exists(script_output_file),
+                        dest='show-header-and-trailer',
+                        help="display annoying header and trailer every time")
+
     parser.add_argument("--ignore-prerequisites", action='store_true',
                         default=False,
                         help="run tests regardless of prerequisites")
@@ -538,17 +541,11 @@ def parse_command_line_arguments():
                             dest=op['func_name'],
                             help="(don't) "+op['func_name'])
 
-    # parser.add_argument("--skip-version-check", action='store_true',
-    #                     default=False,
-    #                     help="skip check for this script's version")
-
     config = vars(parser.parse_args())
-    # if operation_named["show_newest_script_version"]['to_run']:
-    #     operation_named['script_version_check']['to_run'] = False
 
     return config
 
-def exists_insensitive(path):
+def safe_exists(path):
     return os.path.exists(os.path.normcase(path))
 
 
@@ -640,7 +637,7 @@ def script_version_check():
         report('fatal','This script (v{dv}) is out of date. Please pull the latest version (v{cv}) from github'.format(dv=script_version,cv=current_vers))
         sys.exit()
 
-    report('info', 'Script is current version.')
+    report('info', 'Script is current version ({cv})'.format(cv=current_vers))
     return True
 
 
@@ -677,7 +674,7 @@ def is_java_home_valid():
     report('info', 'JAVA_HOME is set to {jhp}'.format(
         jhp=java_home))
 
-    if os.path.exists(os.path.normcase(java_home)):
+    if safe_exists(java_home):
         report('info', 'JAVA_HOME points to an existing directory.')
         return True
 
@@ -752,7 +749,7 @@ def is_android_sdk_installed():
     report('info', 'Environment var(s) point to an Android SDK location {asdk}.'.format(
         asdk=android_sdk_root))
 
-    if os.path.exists(os.path.normcase(android_sdk_root)):
+    if safe_exists(android_sdk_root):
         report('info', 'Android SDK appears to exist.')
         return True
 
@@ -814,9 +811,9 @@ def is_homebrew_installed():
 
 @project_test()
 def is_project_under_git():
-    # if os.path.exists(os.path.normcase('.git')):
-    #     report('info', 'Project is git-controlled.')
-    #     return True
+    if safe_exists('.git'):
+        report('info', 'Project is git-controlled.')
+        return True
 
     if subprocess.run(
             ["git", "rev-parse"], stderr=subprocess.DEVNULL).returncode == 0:
@@ -829,7 +826,7 @@ def is_project_under_git():
 
 @project_test({'prereqs':['is_npm_installed']})
 def is_npm_project():
-    if exists_insensitive(package_json_path):
+    if safe_exists(package_json_path):
         report('info', 'We are in an NPM project.')
         return True
     report('fatal', 'package.json does not exist. Run this from an initialized project directory.')
@@ -837,7 +834,7 @@ def is_npm_project():
 
 @project_test()
 def is_react_native_project():
-    if exists_insensitive("android"):
+    if safe_exists("android"):
         report('info', 'We are really in a React-native project.')
         return True
     report('fatal', '"android" does not exist. This does not appear to be a React-Native project dir.')
@@ -951,7 +948,7 @@ def is_keytool_present():
     return True
 
 @system_test()
-def check_for_emulator():
+def is_emulator_present():
     if shutil.which(emu) != None:
         report('info', 'Found emulator.')
         return True
@@ -961,7 +958,7 @@ def check_for_emulator():
 
 @system_test()
 def is_bundletool_installed():
-    if not os.path.exists(bt_dir):
+    if not safe_exists(bt_dir):
         report('fatal', 'Expected location of bundletool ({bt_dir}) does not exist.. Please specify the correct path to it or create it.'.format(
             bt_dir=bt_dir
         ))
@@ -969,7 +966,7 @@ def is_bundletool_installed():
 
     report('info','bundletool destination folder of {bt_dir} exists.'.format(bt_dir=bt_dir))
 
-    if exists_insensitive(bt_dir+bt_jar):
+    if safe_exists(bt_dir+bt_jar):
         report('info', 'Found current version of bundletool.')
         return True
 
@@ -1003,7 +1000,7 @@ def compare_expected_current_version_of_npm_packages_to_latest_available():
 
 @system_test({'prereqs':['is_android_sdk_installed']})
 def are_command_line_tools_in_path():
-    if exists_insensitive(os.path.join(android_sdk_root, cmdline_tools_path)):
+    if safe_exists(os.path.join(android_sdk_root, cmdline_tools_path)):
         report('info', 'Command-line tools are in path.')
         return True
     report('fatal', 'Command-line tools (latest) are not installed in Android SDK.')
@@ -1011,7 +1008,7 @@ def are_command_line_tools_in_path():
 
 @system_test({'prereqs':['is_android_sdk_installed']})
 def is_correct_ndk_installed():
-    if exists_insensitive(os.path.join(android_sdk_root, 'ndk', ndk_version)):
+    if safe_exists(os.path.join(android_sdk_root, 'ndk', ndk_version)):
         report('info', 'Correct NDK is installed.')
         return True
 
@@ -1023,7 +1020,7 @@ def is_correct_ndk_installed():
 def are_all_build_tools_versions_present():
     missing = 0
     for btv in build_tools_versions:
-        if exists_insensitive(os.path.join(android_sdk_root, 'build-tools', btv)):
+        if safe_exists(os.path.join(android_sdk_root, 'build-tools', btv)):
             report(
                 'info', 'Android SDK build-tools version {btv} exists.'.format(btv=btv))
             continue
@@ -1117,7 +1114,7 @@ def add_keys_to_gradle_properties():
     return True
 
 @project_modification()
-def modify_gradle_properties():
+def modify_gradle_properties_release_section():
     with open(gradle_properties_path, 'r') as gradle_properties_file:
         gradle_properties_content = gradle_properties_file.read()
 
@@ -1178,7 +1175,7 @@ def add_gradle_java_home():
 
 @project_modification()
 def add_universal_json_file():
-    if exists_insensitive(universal_json_path):
+    if safe_exists(universal_json_path):
         report(
             'info', f"{universal_json_path} file already exists. (not modifying it)")
         return True
@@ -1191,7 +1188,7 @@ def add_universal_json_file():
 
 @project_modification()
 def remove_tsx_and_create_app_js():
-    if exists_insensitive(app_tsx_path):
+    if safe_exists(app_tsx_path):
         if os.path.getsize(app_tsx_path) != app_tsx_original_length:
             report(
                 'warn', f"{app_tsx_path} has been modified. Is this intentional?")
@@ -1202,7 +1199,7 @@ def remove_tsx_and_create_app_js():
         report(
             'info', f"{app_tsx_path} removed (it was the default version).")
 
-    if exists_insensitive(app_js_path):
+    if safe_exists(app_js_path):
         report('info', f"{app_js_path} exists and has not been modified.")
         return True
 
@@ -1252,7 +1249,7 @@ def modify_package_json_dependencies():
     report('info', "Backing up {jp} to {jpb}".format(
         jp=json_path, jpb=package_json_file_bak))
 
-    if os.path.exists(package_json_file_bak):
+    if safe_exists(package_json_file_bak):
         report('warn', "Removing existing {jpb} file".format(
             jpb=package_json_file_bak))
         os.remove(package_json_file_bak)
@@ -1269,21 +1266,21 @@ def modify_package_json_dependencies():
 
 @project_modification()
 def create_assets_config():
-    if os.path.exists(font_assets_dir):
+    if safe_exists(font_assets_dir):
         report('info',f'{font_assets_dir} dir exists already')
     else:
         os.makedirs(font_assets_dir)
         report('info',f'{font_assets_dir} dir created')
 
     created_sound_dir = False
-    if os.path.exists(sound_assets_dir):
+    if safe_exists(sound_assets_dir):
         report('info',f'{sound_assets_dir} dir exists already')
     else:
         created_sound_dir = True
         os.makedirs(sound_assets_dir)
         report('info',f'{sound_assets_dir} dir created')
 
-    if os.path.exists(react_native_config_path):
+    if safe_exists(react_native_config_path):
         report('info',f'{react_native_config_path} exists already; not overwritten')
         if created_sound_dir:
             report('warn',f'You may need to add {sound_assets_dir} to {react_native_config_path}')
@@ -1297,7 +1294,7 @@ def create_assets_config():
 
 @project_modification()
 def create_keystore():
-    if exists_insensitive(keystore_path):
+    if safe_exists(keystore_path):
         report('info', "Keystore already exists. (not overwriting it)")
         return True
 
@@ -1308,8 +1305,8 @@ def create_keystore():
 
 @project_modification()
 def create_prettierrc():
-    if exists_insensitive(".prettierrc") or \
-        exists_insensitive(".prettierrc.js"):
+    if safe_exists(".prettierrc") or \
+        safe_exists(".prettierrc.js"):
             report('info', 'Found existing .prettierrc or .prettierrc.js, so not modifying it.')
             return True
 
@@ -1325,13 +1322,18 @@ def execute_operations():
     for operation in operations_in_order:
         fn = operation['func_name']
         if not operation['to_run']:
+            report('info',"(Skipping {fn})".format(fn=fn))
             continue
-        if operation['type'] == 'modification' and not ok_to_proceed_with_modifications:
-            report('info',"Skipping {fn} ('{typ}' filtered out; previous test failure)".format(
-                fn=fn,
-                typ=operation['type'])
-            )
-            continue
+        if operation['type'] == 'modification':
+            if not ok_to_proceed_with_modifications:
+                report('info',"Skipping {fn} ('{typ}' filtered out; previous test failure)".format(
+                    fn=fn,
+                    typ=operation['type'])
+                )
+                continue
+            if config['simulate']:
+                report('info',"(Simulating {fn})".format(fn=fn))
+                continue
         try:
             result = operation['func']()
             operation['result'] = result
@@ -1362,11 +1364,12 @@ if __name__ == "__main__":
 
     new_ops = list(map(lambda x: {**x,'func':'<>'}, operations_in_order))
 
-    report('info', welcome_message, include_line=False)
+    if config['show-header-and-trailer']:
+        report('info', welcome_message, include_line=False)
 
     success = execute_operations()
 
-    if success:
+    if success and config['show-header-and-trailer']:
         report('info', 'Be sure to:\n{pcs}\n'.format(
             pcs=post_config_steps), include_line=False)
 

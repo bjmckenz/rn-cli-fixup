@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.3.3"
+script_version = "1.3.4"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -550,7 +550,8 @@ def safe_exists(path):
 
 
 def paths_equal(path1, path2):
-    os.path.normcase(path1) == os.path.normcase(path2)
+    #print("comparing {p1} to {p2}".format(p1=path1,p2=path2))
+    return os.path.normcase(path1) == os.path.normcase(path2)
 
 def current_version_of_npm_package(pkg):
     url = 'https://unpkg.com/{pkg}/package.json'.format(pkg=pkg)
@@ -756,7 +757,7 @@ def is_android_sdk_installed():
     report('fatal', 'ANDROID_SDK_ROOT variable is set but directory does not exist. Set it CORRECTLY in your environment.')
     return False
 
-#@system_test({'prereqs':['is_android_sdk_installed']})
+@system_test({'prereqs':['is_android_sdk_installed']})
 def are_paths_valid():
     existing_path = os.environ.get('PATH').split(path_variable_separator)
     found_platform_tools = False

@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.3.5"
+script_version = "1.4.0"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -121,6 +121,10 @@ gradle_wrapper_properties_path = 'android{ps}gradle{ps}wrapper{ps}gradle-wrapper
 script_output_file = 'reactnative-fixup.txt'
 
 kotlinVersion = "1.7.10"
+
+# reanimated adds about 199 chars to the path, and the max length on Windows
+# is 250.
+max_windows_project_path_length = 45
 
 dependencies_to_add = {
     "@react-native-masked-view/masked-view": "^0.3.0",
@@ -843,6 +847,16 @@ $ npx react-native@latest init MyProject
 * Open that folder in VS Code.
 ''')
     return False
+
+@project_test()
+def is_project_path_too_long():
+    if running_on_windows and len(os.getcwd()) > max_windows_project_path_length:
+        report('fatal', 'Project path is too long. Move it to a shorter path.')
+        report('howto','''
+* Move this directory to a shorter path, such as C:\SOURCE
+* Be sure to move rn-cli-fixup to the same directory.
+''')
+        return False
 
 @project_test()
 def is_react_native_project():

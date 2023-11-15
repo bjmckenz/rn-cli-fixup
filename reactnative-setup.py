@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.4.0"
+script_version = "1.4.1"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -857,6 +857,7 @@ def is_project_path_too_long():
 * Be sure to move rn-cli-fixup to the same directory.
 ''')
         return False
+    return True
 
 @project_test()
 def is_react_native_project():

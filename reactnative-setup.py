@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.4.2"
+script_version = "1.5.1"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -46,8 +46,6 @@ config = {}
 # can be set to false if a test fails
 ok_to_proceed_with_modifications = True
 
-### vvvv BEGIN CUSTOMIZE vvvv ###
-
 # Specify the path to bundletool.jar
 bt_dir = 'C:{ps}Program Files{ps}'.format(ps=path_separator) \
     if running_on_windows \
@@ -61,9 +59,6 @@ key_alias = "my-key-alias"
 key_password = "12345678"
 
 distinguished_name = "CN=MyName, OU=MyOrgUnit, O=MyOrg, L=MyCity, ST=MyStateOrProvince, C=MyCountry"
-
-### ^^^^ END CUSTOMIZE ^^^^ ###
-
 
 ### vvv NOT INTENDED TO BE CUSTOMIZED (but fix it if needed) vvv ###
 
@@ -133,8 +128,8 @@ dependencies_to_add = {
     "react-native-asset": "^2.1.1",
     "react": "18.2.0",
     "react-native": "0.72.7",
-    "react-native-gesture-handler": "^2.13.4",
-    "react-native-reanimated": "^3.5.4",
+    "react-native-gesture-handler": "^2.14.0",
+    "react-native-reanimated": "^3.6.1",
     "react-native-safe-area-context": "^4.7.4",
     "react-native-screens": "^3.27.0"
 }

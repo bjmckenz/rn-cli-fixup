@@ -12,7 +12,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.4.1"
+script_version = "1.4.2"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -27,8 +27,6 @@ script_version = "1.4.1"
 #   gitbash and cygwin can handle \ in paths
 # FIXME: https://stackoverflow.com/questions/70258316/how-to-fix-dexoptionsactiondexoptions-unit-is-deprecated-setting-dexopt
 # FIXME: https://stackoverflow.com/questions/71365373/software-components-will-not-be-created-automatically-for-maven-publishing-from#:~:text=WARNING%3A%20Software%20Components%20will%20not,use%20the%20new%20publishing%20DSL.
-# FIXME: When running a single thing, turn off modifications
-# FIXME: release section should use proper file reading, not regex
 # TODO: output number of tests and modifications
 
 # ENVIRONMENTY STUFF
@@ -80,19 +78,19 @@ expected_java_version = "20.0.2"
 
 jdk_download_path = "https://jdk.java.net/archive/"
 
-signing_config_text = '''
-    release {{
-        storeFile file('{keystore_file}')
-        storePassword '{store_password}'
-        keyAlias '{key_alias}'
-        keyPassword '{key_password}'
-    }}
-'''.format(
-    keystore_file=keystore_file,
-    store_password=store_password,
-    key_alias=key_alias,
-    key_password=key_password
-)
+# This isomorphic with build.gradle format as we parse it
+release_signing_config = {
+    'key': 'release',
+    'contents': [
+        {'line': "storeFile file('{keystore_file}')".format(
+            keystore_file=keystore_file)},
+        {'line': "storePassword '{store_password}'".format(
+            store_password=store_password)},
+        {'line': "keyAlias '{key_alias}'".format(key_alias=key_alias)},
+        {'line': "keyPassword '{key_password}'".format(
+            key_password=key_password)},
+    ]
+}
 
 gradle_properties_to_add = [
     'MYAPP_RELEASE_STORE_FILE={keystore_file}.jks'.format(
@@ -579,31 +577,58 @@ def read_gradle_file(file_path):
     with open(file_path, 'r') as gradle_config:
         content = gradle_config.read()
         objstack = [ [] ]
+        processing_conditionals = False
         for line in map(str.strip, content.splitlines()):
+            if processing_conditionals:
+                objstack[len(objstack)-1].append({'line':line})
+                if line == '}':
+                    processing_conditionals = False
+                continue
+
             if line == '}':
                 objstack.pop()
             elif len(line) and (line[0] == '*' or line.startswith('/*') or line.startswith('//')):
                 # hack for comments -- not really very good but hopefully adequate
                 objstack[len(objstack)-1].append({'line':line})
             elif line.endswith('{'):
-                sub = { 'key': line.split(' ')[0], 'contents':[] }
+                key = line.split(' ')[0]
+                if key == 'if':
+                    processing_conditionals = True
+                    objstack[len(objstack)-1].append({'line':line})
+                    continue
+
+                sub = { 'key': key, 'contents':[] }
                 objstack[len(objstack)-1].append(sub)
                 objstack.append(sub['contents'])
             else:
                 objstack[len(objstack)-1].append({'line':line})
-    return objstack[0]
+    return {'key':'FILE', 'contents':objstack[0]}
 
-def gradle_config_as_str(contents,level=0):
+def getSection(nodes, key):
+    if nodes is None or 'contents' not in nodes:
+        return None
+    singlenodelist = list(filter(lambda x: 'key' in x and x['key'] == key, nodes['contents']))
+    return singlenodelist[0] if len(singlenodelist) else None
+
+def gradle_config_as_str(node,level=0):
     lines = []
+    contents = node['contents']
     for element in contents:
         if 'line' in element:
-            lines.append(('    '* level + element['line']).rstrip())
+            text = element['line']
+            if text == '':
+                if len(lines) and lines[len(lines)-1] == '':
+                    continue
+                lines.append('')
+                continue
+            lines.append('    '* level + text)
         else:
-            lines.append(('    '*level + element['key'] + ' {').rstrip() )
-            lines.append(gradle_config_as_str(element['contents'],level+1))
+            lines.append('    '*level + element['key'] + ' {' )
+            lines.append(gradle_config_as_str(element,level+1))
             lines.append('    '*level + '}')
 
     return '\n'.join(lines) + ('\n' if level==0 else '')
+
 
 # Logger Class tees all output to output file
 
@@ -1097,8 +1122,8 @@ def add_kotlin_version_to_build_gradle():
     # Find buildscript.ext, ensure there is a kotlinVersion
     # and that it has the correct version
 
-    buildscript = list(filter(lambda x: 'key' in x and x['key'] == 'buildscript', bg))[0]
-    ext = list(filter(lambda x: 'key' in x and x['key'] == 'ext', buildscript['contents']))[0]
+    buildscript = getSection(bg,'buildscript')
+    ext = getSection(buildscript,'ext')
 
     kvs = list(filter(lambda x: 'line' in x and x['line'].startswith('kotlinVersion'), ext['contents']))
     if len(kvs) and 'line' in kvs[0] and kotlinVersion not in kvs[0]['line']:
@@ -1115,24 +1140,44 @@ def add_kotlin_version_to_build_gradle():
 
 @project_modification()
 def add_signing_config_to_app_build_gradle():
-    with open(app_build_gradle_path, 'r') as app_build_gradle_file:
-        build_gradle_content = app_build_gradle_file.read()
+    bg = read_gradle_file(app_build_gradle_path)
 
-        # Check if the signingConfigs section already exists
-        if 'signingConfigs {' in build_gradle_content:
-            # If it exists, append the signing_config_text to it
-            modified_content = re.sub(
-                r'(signingConfigs \{[^\}]*\})', r'\1' + signing_config_text, build_gradle_content, flags=re.DOTALL)
-        else:
-            # If it doesn't exist, add the entire signingConfig section
-            modified_content = re.sub(
-                r'(buildTypes \{[^\}]*\})', r'signingConfigs {\n' + signing_config_text + r'\1', build_gradle_content, flags=re.DOTALL)
+    need_to_write = False
 
-    # Write the modified content back to the file
-    with open(app_build_gradle_path, 'w') as app_build_gradle_file:
-        app_build_gradle_file.write(modified_content)
+    android = getSection(bg,'android')
+    signingConfigs = getSection(android,'signingConfigs')
+
+    if not signingConfigs:
+        need_to_write = True
+        signingConfigs = {'key':'signingConfigs','contents':[]}
+        android['contents'].append(signingConfigs)
+
+    # fix previous script error: would write multiple "release" sections
+    found_release = False
+    for (i,sc) in enumerate(signingConfigs['contents']):
+        if 'key' not in sc:
+            continue
+        if sc['key'] == 'release':
+            if found_release:
+                need_to_write = True
+                del signingConfigs['contents'][i]
+                continue
+            found_release = True
+
+    release = getSection(signingConfigs,'release')
+    if not release:
+        need_to_write = True
+        signingConfigs['contents'].append(release_signing_config)
+
+    if not need_to_write:
+        report('info', "app/build.gradle file already contained signingConfigs.")
+        return True
+
+    with open(app_build_gradle_path, 'w') as gradle_file:
+        gradle_file.write(gradle_config_as_str(bg))
 
     report('info', "app/build.gradle file updated successfully with signingConfigs.")
+
     return True
 
 @project_modification()
@@ -1301,6 +1346,8 @@ def modify_package_json_dependencies():
                 indent=2, sort_keys=True)
 
     report('info', "package.json file adjusted successfully.")
+    report('howto', "$ npm install")
+
     return True
 
 @project_modification()

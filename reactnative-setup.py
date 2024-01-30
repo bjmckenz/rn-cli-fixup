@@ -12,11 +12,12 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.5.1"
+script_version = "1.5.2"
 
 # This script is intended to be run from the root of a React Native project directory.
 
 ### TO DO
+# TODO: log changes to a tombstone file
 # TODO: Clean up filenames, envvars, file contents
 # TODO: move data to a file
 # TODO: give revised version of .bashrc/.zshrc
@@ -99,7 +100,7 @@ gradle_properties_to_add = [
 
 
 app_tsx_path = 'App.tsx'  # Expected for new projects
-app_tsx_original_length = 2605
+app_tsx_original_lengths = (2605, 2617)
 
 package_json_path = 'package.json'
 # created to specify which apk to extract from apks file
@@ -313,7 +314,10 @@ module.exports = {
 '''
 
 # tests command-line tools
-cmdline_tools_path = 'cmdline-tools/latest/bin'
+cmdline_tools_path = 'cmdline-tools{ps}latest{ps}bin'.format(
+    ps=cmd_argument_separator
+)
+
 # tests NDK
 ndk_version = '23.1.7779620'
 # tests buildtools
@@ -873,9 +877,9 @@ def is_project_path_too_long():
     if running_on_windows and len(os.getcwd()) > max_windows_project_path_length:
         report('fatal', 'Project path is too long. Move it to a shorter path.')
         report('howto','''
-* Move this directory to a shorter path, such as C:\SOURCE
+* Move this directory to a shorter path, such as C:{ps}SOURCE
 * Be sure to move rn-cli-fixup to the same directory.
-''')
+'''.format(ps=cmd_argument_separator))
         return False
     return True
 
@@ -1051,11 +1055,24 @@ def compare_expected_current_version_of_npm_packages_to_latest_available():
     return True
 
 @system_test({'prereqs':['is_android_sdk_installed']})
-def are_command_line_tools_in_path():
+def are_command_line_tools_installed():
     if safe_exists(os.path.join(android_sdk_root, cmdline_tools_path)):
-        report('info', 'Command-line tools are in path.')
+        report('info', 'Command-line tools are installed.')
         return True
     report('fatal', 'Command-line tools (latest) are not installed in Android SDK.')
+    return False
+
+@system_test({'prereqs':['are_command_line_tools_installed']})
+def are_command_line_tools_in_path():
+    if shutil.which('sdkmanager') != None:
+        report('info', 'Command-line tools are in path.')
+        return True
+    report('fatal', 'Command-line tools are installed but not in PATH.')
+    report('howto','''
+* Add the following directory to your path: {dir}
+* Restart Terminal and VS Code.
+'''.format(dir=os.path.join(android_sdk_root,cmdline_tools_path)))
+    return False
     return False
 
 @system_test({'prereqs':['is_android_sdk_installed']})
@@ -1268,7 +1285,7 @@ def add_universal_json_file():
 @project_modification()
 def remove_tsx_and_create_app_js():
     if safe_exists(app_tsx_path):
-        if os.path.getsize(app_tsx_path) != app_tsx_original_length:
+        if os.path.getsize(app_tsx_path) not in app_tsx_original_lengths:
             report(
                 'warn', f"{app_tsx_path} has been modified. Is this intentional?")
             report('info', f"{app_tsx_path} not overwritten.")
@@ -1450,7 +1467,7 @@ if __name__ == "__main__":
 
     success = execute_operations()
 
-    if success and config['show-header-and-trailer']:
+    if counts['fatal'] == 0 or config['show-header-and-trailer']:
         report('info', 'Be sure to:\n{pcs}\n'.format(
             pcs=post_config_steps), include_line=False)
 

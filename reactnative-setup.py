@@ -2,6 +2,7 @@
 from inspect import currentframe
 from urllib.request import urlopen
 import argparse
+from datetime import datetime
 import json
 import os
 import platform
@@ -12,7 +13,7 @@ import sys
 
 script_url = 'https://raw.githubusercontent.com/bjmckenz/rn-cli-fixup/main/reactnative-setup.py'
 
-script_version = "1.5.2"
+script_version = "1.5.3"
 
 # This script is intended to be run from the root of a React Native project directory.
 
@@ -635,7 +636,7 @@ def gradle_config_as_str(node,level=0):
 class Logger(object):
     def __init__(self):
         self.terminal = sys.stdout
-        self.log = open(script_output_file, "w")
+        self.log = open(script_output_file, "a")
 
     def write(self, message):
         self.terminal.write(message)
@@ -1459,6 +1460,7 @@ if __name__ == "__main__":
     config = parse_command_line_arguments()
 
     sys.stdout = Logger()
+    print("\n\n*** Run beginning " + datetime.now().isoformat() + " ***\n")
 
     new_ops = list(map(lambda x: {**x,'func':'<>'}, operations_in_order))
 
@@ -1472,3 +1474,4 @@ if __name__ == "__main__":
             pcs=post_config_steps), include_line=False)
 
     print_counts()
+    print("*** Run ending " + datetime.now().isoformat() + " ***\n")
